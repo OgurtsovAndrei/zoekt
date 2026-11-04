@@ -104,6 +104,10 @@ type indexData struct {
 	// rawConfigMasks contains the encoded RawConfig for each repository
 	rawConfigMasks []uint8
 
+	// tombstonedDocs is a bitset indexed by docID marking documents whose file
+	// name is present in their repository's FileTombstones.
+	tombstonedDocs []uint64
+
 	// Cache for docMatchTree objects
 	docMatchTreeCache *docMatchTreeCache
 }
@@ -335,6 +339,7 @@ func (d *indexData) memoryUse() int {
 	sz += 2 * len(d.repos)
 	sz += 8 * len(d.runeDocSections)
 	sz += 8 * len(d.fileBranchMasks)
+	sz += 8 * len(d.tombstonedDocs)
 	sz += d.contentNgrams.SizeBytes()
 	sz += d.fileNameNgrams.SizeBytes()
 	return sz
@@ -511,6 +516,87 @@ func (d *indexData) fileName(i uint32) []byte {
 
 func (d *indexData) numDocs() uint32 {
 	return uint32(len(d.fileBranchMasks))
+}
+
+func (d *indexData) isDocTombstoned(doc uint32) bool {
+	word := int(doc >> 6)
+	if word >= len(d.tombstonedDocs) {
+		return false
+	}
+	return d.tombstonedDocs[word]&(uint64(1)<<(doc&63)) != 0
+}
+
+func (d *indexData) initTombstonedDocs() error {
+	hasTombstones := false
+	for i := range d.repoMetaData {
+		if len(d.repoMetaData[i].FileTombstones) > 0 {
+			hasTombstones = true
+			break
+		}
+	}
+	if !hasTombstones {
+		return nil
+	}
+
+	docCount := d.numDocs()
+	if len(d.repos) != int(docCount) {
+		return fmt.Errorf("repos length mismatch: got %d, want %d", len(d.repos), docCount)
+	}
+	if docCount > 0 && len(d.fileNameIndex) != int(docCount)+1 {
+		return fmt.Errorf("fileNameIndex length mismatch: got %d, want %d", len(d.fileNameIndex), docCount+1)
+	}
+
+	for docID := uint32(0); docID < docCount; docID++ {
+		repoID := d.repos[docID]
+		if int(repoID) >= len(d.repoMetaData) {
+			return fmt.Errorf("document %d repoID %d out of range %d", docID, repoID, len(d.repoMetaData))
+		}
+		tombstones := d.repoMetaData[repoID].FileTombstones
+		if len(tombstones) == 0 {
+			continue
+		}
+		if _, ok := tombstones[string(d.fileName(docID))]; ok {
+			if d.tombstonedDocs == nil {
+				d.tombstonedDocs = make([]uint64, (docCount+63)/64)
+			}
+			d.tombstonedDocs[docID>>6] |= uint64(1) << (docID & 63)
+		}
+	}
+
+	for i := range d.repoMetaData {
+		d.repoMetaData[i].FileTombstones = nil
+	}
+	return nil
+}
+
+func (d *indexData) repoMetaWithTombstones(repoID int) zoekt.Repository {
+	repo := d.repoMetaData[repoID]
+	if len(d.tombstonedDocs) == 0 {
+		return repo
+	}
+
+	var restored map[string]struct{}
+	if len(repo.FileTombstones) > 0 {
+		restored = make(map[string]struct{}, len(repo.FileTombstones))
+		for k := range repo.FileTombstones {
+			restored[k] = struct{}{}
+		}
+	}
+
+	docCount := d.numDocs()
+	for docID := uint32(0); docID < docCount; docID++ {
+		if int(docID) >= len(d.repos) || int(d.repos[docID]) != repoID {
+			continue
+		}
+		if d.isDocTombstoned(docID) {
+			if restored == nil {
+				restored = make(map[string]struct{})
+			}
+			restored[string(d.fileName(docID))] = struct{}{}
+		}
+	}
+	repo.FileTombstones = restored
+	return repo
 }
 
 func (s *indexData) Close() {

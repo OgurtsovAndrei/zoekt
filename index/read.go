@@ -15,6 +15,7 @@
 package index
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,8 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"sync"
+	"time"
 
 	"github.com/RoaringBitmap/roaring/v2"
 	"github.com/prometheus/client_golang/prometheus"
@@ -264,7 +267,7 @@ func (r *reader) readIndexData(toc *indexTOC) (*indexData, error) {
 		docMatchTreeCache: newDocMatchTreeCache(0),
 	}
 
-	repos, md, err := r.parseMetadata(toc.metaData, toc.repoMetaData)
+	repos, md, err := r.parseMetadataForSearch(toc.metaData, toc.repoMetaData)
 	if md != nil && !canReadVersion(md) {
 		return nil, fmt.Errorf("file is v%d, want v%d", md.IndexFormatVersion, IndexFormatVersion)
 	} else if err != nil {
@@ -428,6 +431,10 @@ func (r *reader) readIndexData(toc *indexTOC) (*indexData, error) {
 		d.repos = make([]uint16, len(d.fileBranchMasks))
 	}
 
+	if err := d.initTombstonedDocs(); err != nil {
+		return nil, err
+	}
+
 	if err := d.calculateStats(); err != nil {
 		return nil, err
 	}
@@ -440,7 +447,165 @@ func (r *reader) readIndexData(toc *indexTOC) (*indexData, error) {
 // data and cannot be loaded, so callers may treat it as safe to delete.
 var ErrEmptyShard = errors.New("len(repos)=0. Cannot backfill ID")
 
+const (
+	minSharedMetaBytes   = 64 * 1024
+	maxSharedMetaEntries = 4
+	sharedMetaCacheTTL   = 5 * time.Second
+)
+
+type sharedMetaKey struct {
+	sum        [sha256.Size]byte
+	compoundV2 bool
+}
+
+type sharedMetaEntry struct {
+	key   sharedMetaKey
+	repos []zoekt.Repository
+}
+
+type sharedMetaCall struct {
+	done  chan struct{}
+	repos []zoekt.Repository
+	err   error
+}
+
+type metaBlobDeduplicator struct {
+	mu               sync.Mutex
+	entries          []sharedMetaEntry
+	inflight         map[sharedMetaKey]*sharedMetaCall
+	idleTimer        *time.Timer
+	timerGen         uint64
+	onTimerScheduled func(fire func())
+}
+
+var globalMetaDeduplicator = &metaBlobDeduplicator{
+	inflight: make(map[sharedMetaKey]*sharedMetaCall),
+}
+
+func cloneSharedRepos(repos []zoekt.Repository) []*zoekt.Repository {
+	out := make([]*zoekt.Repository, len(repos))
+	for i := range repos {
+		cp := repos[i]
+		out[i] = &cp
+	}
+	return out
+}
+
+func unmarshalRepoBlob(blob []byte, compoundV2 bool) ([]*zoekt.Repository, error) {
+	var repos []*zoekt.Repository
+	if compoundV2 {
+		if err := json.Unmarshal(blob, &repos); err != nil {
+			return nil, err
+		}
+	} else {
+		repos = make([]*zoekt.Repository, 1)
+		if err := json.Unmarshal(blob, &repos[0]); err != nil {
+			return nil, err
+		}
+	}
+	return repos, nil
+}
+
+func (c *metaBlobDeduplicator) touchTimerLocked() {
+	if c.idleTimer != nil {
+		c.idleTimer.Stop()
+	}
+	c.timerGen++
+	gen := c.timerGen
+	fire := func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.timerGen == gen && len(c.inflight) == 0 {
+			c.entries = nil
+		}
+	}
+	if c.onTimerScheduled != nil {
+		c.onTimerScheduled(fire)
+		return
+	}
+	c.idleTimer = time.AfterFunc(sharedMetaCacheTTL, fire)
+}
+
+func (c *metaBlobDeduplicator) unmarshalShared(blob []byte, compoundV2 bool) ([]*zoekt.Repository, error) {
+	if len(blob) < minSharedMetaBytes {
+		return unmarshalRepoBlob(blob, compoundV2)
+	}
+
+	key := sharedMetaKey{
+		sum:        sha256.Sum256(blob),
+		compoundV2: compoundV2,
+	}
+
+	c.mu.Lock()
+	for i, entry := range c.entries {
+		if entry.key == key {
+			if i > 0 {
+				copy(c.entries[1:i+1], c.entries[0:i])
+				c.entries[0] = entry
+			}
+			c.touchTimerLocked()
+			out := cloneSharedRepos(entry.repos)
+			c.mu.Unlock()
+			return out, nil
+		}
+	}
+
+	if call, ok := c.inflight[key]; ok {
+		c.mu.Unlock()
+		<-call.done
+		if call.err != nil {
+			return nil, call.err
+		}
+		return cloneSharedRepos(call.repos), nil
+	}
+
+	call := &sharedMetaCall{done: make(chan struct{})}
+	c.inflight[key] = call
+	c.mu.Unlock()
+
+	parsed, err := unmarshalRepoBlob(blob, compoundV2)
+	var snapshot []zoekt.Repository
+	if err == nil {
+		snapshot = make([]zoekt.Repository, 0, len(parsed))
+		for _, r := range parsed {
+			if r != nil {
+				snapshot = append(snapshot, *r)
+			}
+		}
+	}
+
+	c.mu.Lock()
+	call.repos = snapshot
+	call.err = err
+	delete(c.inflight, key)
+	if err == nil {
+		entry := sharedMetaEntry{key: key, repos: snapshot}
+		if len(c.entries) >= maxSharedMetaEntries {
+			c.entries = c.entries[:maxSharedMetaEntries-1]
+		}
+		c.entries = append([]sharedMetaEntry{entry}, c.entries...)
+	}
+	c.touchTimerLocked()
+	close(call.done)
+	c.mu.Unlock()
+
+	if err != nil {
+		return nil, err
+	}
+	return cloneSharedRepos(snapshot), nil
+}
+
+type repoBlobUnmarshaler func(blob []byte, compoundV2 bool) ([]*zoekt.Repository, error)
+
+func (r *reader) parseMetadataForSearch(metaData simpleSection, repoMetaData simpleSection) ([]*zoekt.Repository, *zoekt.IndexMetadata, error) {
+	return r.parseMetadataWith(metaData, repoMetaData, globalMetaDeduplicator.unmarshalShared)
+}
+
 func (r *reader) parseMetadata(metaData simpleSection, repoMetaData simpleSection) ([]*zoekt.Repository, *zoekt.IndexMetadata, error) {
+	return r.parseMetadataWith(metaData, repoMetaData, unmarshalRepoBlob)
+}
+
+func (r *reader) parseMetadataWith(metaData simpleSection, repoMetaData simpleSection, unmarshal repoBlobUnmarshaler) ([]*zoekt.Repository, *zoekt.IndexMetadata, error) {
 	var md zoekt.IndexMetadata
 	if err := r.readJSON(&md, metaData); err != nil {
 		return nil, nil, err
@@ -461,26 +626,70 @@ func (r *reader) parseMetadata(metaData simpleSection, repoMetaData simpleSectio
 		}
 	}
 
-	var repos []*zoekt.Repository
-	if md.IndexFormatVersion >= 17 {
-		if err := json.Unmarshal(blob, &repos); err != nil {
-			return nil, &md, err
-		}
-	} else {
-		repos = make([]*zoekt.Repository, 1)
-		if err := json.Unmarshal(blob, &repos[0]); err != nil {
-			return nil, &md, err
-		}
+	repos, err := unmarshal(blob, md.IndexFormatVersion >= 17)
+	if err != nil {
+		return nil, &md, err
 	}
 
 	if md.ID == "" {
-		if len(repos) == 0 {
+		if len(repos) == 0 || repos[0] == nil {
 			return nil, nil, ErrEmptyShard
 		}
 		md.ID = backfillID(repos[0].Name)
 	}
 
 	return repos, &md, nil
+}
+
+func filterShardFileTombstones(shardPath string, tombstones map[string]struct{}) (map[string]struct{}, error) {
+	if len(tombstones) == 0 {
+		return nil, nil
+	}
+
+	f, err := os.Open(shardPath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	inf, err := NewIndexFile(f)
+	if err != nil {
+		return nil, err
+	}
+	defer inf.Close()
+
+	rd := &reader{r: inf}
+	var toc indexTOC
+	if err := rd.readTOCSections(&toc, []string{"fileNames"}); err != nil {
+		return nil, err
+	}
+
+	if len(toc.fileNames.offsets) == 0 {
+		return nil, nil
+	}
+
+	nameContent, err := inf.Read(toc.fileNames.data.off, toc.fileNames.data.sz)
+	if err != nil {
+		return nil, err
+	}
+	nameIndex := toc.fileNames.relativeIndex()
+
+	var filtered map[string]struct{}
+	for i := 0; i+1 < len(nameIndex); i++ {
+		start, end := nameIndex[i], nameIndex[i+1]
+		if end > uint32(len(nameContent)) || start > end {
+			return nil, fmt.Errorf("corrupt fileNames section in shard %q", shardPath)
+		}
+		name := nameContent[start:end]
+		if _, ok := tombstones[string(name)]; ok {
+			if filtered == nil {
+				filtered = make(map[string]struct{})
+			}
+			filtered[string(name)] = struct{}{}
+		}
+	}
+
+	return filtered, nil
 }
 
 const ngramEncoding = 8

@@ -717,6 +717,14 @@ func (b *Builder) Finish() error {
 				repository.FileTombstones[f] = struct{}{}
 			}
 
+			if len(repository.FileTombstones) > 0 {
+				filteredTombstones, err := filterShardFileTombstones(shard, repository.FileTombstones)
+				if err != nil {
+					return fmt.Errorf("filtering file tombstones for shard %q: %w", shard, err)
+				}
+				repository.FileTombstones = filteredTombstones
+			}
+
 			if !BranchNamesEqual(repository.Branches, b.opts.RepositoryDescription.Branches) {
 				return deltaBranchSetError{
 					shardName: shard,

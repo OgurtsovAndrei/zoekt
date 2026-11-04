@@ -231,6 +231,9 @@ nextFileMatch:
 			}
 
 			// Skip documents that are tombstoned
+			if d.isDocTombstoned(nextDoc) {
+				continue
+			}
 			if len(repoMetadata.FileTombstones) > 0 {
 				if _, tombstoned := repoMetadata.FileTombstones[string(d.fileName(nextDoc))]; tombstoned {
 					continue
