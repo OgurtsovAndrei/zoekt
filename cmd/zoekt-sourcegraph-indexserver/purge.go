@@ -8,8 +8,8 @@ import (
 
 	"go.uber.org/multierr"
 
-	"github.com/sourcegraph/zoekt/index"
-	"github.com/sourcegraph/zoekt/internal/tenant"
+	"github.com/OgurtsovAndrei/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant"
 )
 
 // purgeTenantShards removes all simple shards from dir on a best-effort basis.

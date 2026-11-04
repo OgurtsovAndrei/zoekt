@@ -20,7 +20,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/sourcegraph/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
 )
 
 func TestJSON(t *testing.T) {

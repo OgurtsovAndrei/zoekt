@@ -41,12 +41,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sourcegraph/zoekt/index"
-	"github.com/sourcegraph/zoekt/internal/shardtest"
-	"github.com/sourcegraph/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/internal/shardtest"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 func TestMain(m *testing.M) {

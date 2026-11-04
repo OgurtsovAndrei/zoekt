@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sourcegraph/zoekt"
+	"github.com/OgurtsovAndrei/zoekt"
 )
 
 var mockRepos []*zoekt.Repository

@@ -8,10 +8,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/grpc/chunk"
-	webserverv1 "github.com/sourcegraph/zoekt/grpc/protos/zoekt/webserver/v1"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/grpc/chunk"
+	webserverv1 "github.com/OgurtsovAndrei/zoekt/grpc/protos/zoekt/webserver/v1"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 func NewServer(s zoekt.Streamer) *Server {

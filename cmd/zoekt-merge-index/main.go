@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sourcegraph/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/index"
 )
 
 // merge merges the input shards into a compound shard in dstDir. It returns the

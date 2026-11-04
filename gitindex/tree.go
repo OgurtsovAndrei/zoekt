@@ -28,7 +28,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
-	"github.com/sourcegraph/zoekt/ignore"
+	"github.com/OgurtsovAndrei/zoekt/ignore"
 )
 
 // RepoWalker walks one or more commit trees, collecting the files to index in its Files map.

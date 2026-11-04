@@ -22,7 +22,7 @@ import (
 
 	"github.com/grafana/regexp"
 
-	"github.com/sourcegraph/zoekt/languages"
+	"github.com/OgurtsovAndrei/zoekt/languages"
 )
 
 var _ = log.Printf

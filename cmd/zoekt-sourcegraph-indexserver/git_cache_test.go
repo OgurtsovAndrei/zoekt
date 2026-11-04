@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/sourcegraph/zoekt"
-	indexserverv1 "github.com/sourcegraph/zoekt/cmd/zoekt-sourcegraph-indexserver/grpc/protos/zoekt/indexserver/v1"
-	"github.com/sourcegraph/zoekt/gitindex"
-	"github.com/sourcegraph/zoekt/internal/tenant"
-	"github.com/sourcegraph/zoekt/internal/testutil"
-	"github.com/sourcegraph/zoekt/search"
+	"github.com/OgurtsovAndrei/zoekt"
+	indexserverv1 "github.com/OgurtsovAndrei/zoekt/cmd/zoekt-sourcegraph-indexserver/grpc/protos/zoekt/indexserver/v1"
+	"github.com/OgurtsovAndrei/zoekt/gitindex"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt/search"
 )
 
 func writeCacheEntry(t *testing.T, args *indexArgs, entry gitRepoCacheEntry) string {

@@ -20,7 +20,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sourcegraph/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/index"
 )
 
 var (

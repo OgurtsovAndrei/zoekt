@@ -22,10 +22,10 @@ import (
 
 	"slices"
 
-	"github.com/sourcegraph/zoekt"
-	configv1 "github.com/sourcegraph/zoekt/cmd/zoekt-sourcegraph-indexserver/grpc/protos/sourcegraph/zoekt/configuration/v1"
-	"github.com/sourcegraph/zoekt/internal/ctags"
-	"github.com/sourcegraph/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt"
+	configv1 "github.com/OgurtsovAndrei/zoekt/cmd/zoekt-sourcegraph-indexserver/grpc/protos/sourcegraph/zoekt/configuration/v1"
+	"github.com/OgurtsovAndrei/zoekt/internal/ctags"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
 )
 
 func TestIterateIndexOptions_Fingerprint(t *testing.T) {

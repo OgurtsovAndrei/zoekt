@@ -12,7 +12,7 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 
-	"github.com/sourcegraph/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
 )
 
 // createTestRepo creates a git repo with various test files and returns

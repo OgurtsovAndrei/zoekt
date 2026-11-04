@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/sourcegraph/zoekt/grpc/grpcutil"
+	"github.com/OgurtsovAndrei/zoekt/grpc/grpcutil"
 )
 
 var (

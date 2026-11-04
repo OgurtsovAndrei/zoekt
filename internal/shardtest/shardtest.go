@@ -8,9 +8,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/index"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 // Builder returns a ShardBuilder for repo with docs added.

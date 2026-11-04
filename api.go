@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 const (

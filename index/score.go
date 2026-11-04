@@ -23,8 +23,8 @@ import (
 
 	"github.com/go-enry/go-enry/v2"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/internal/ctags"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/internal/ctags"
 )
 
 const (

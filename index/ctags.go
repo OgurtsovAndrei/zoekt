@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/internal/ctags"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/internal/ctags"
 )
 
 // Make sure all names are lowercase here, since they are normalized

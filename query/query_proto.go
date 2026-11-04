@@ -7,7 +7,7 @@ import (
 	"github.com/RoaringBitmap/roaring/v2"
 	"github.com/grafana/regexp"
 
-	webserverv1 "github.com/sourcegraph/zoekt/grpc/protos/zoekt/webserver/v1"
+	webserverv1 "github.com/OgurtsovAndrei/zoekt/grpc/protos/zoekt/webserver/v1"
 )
 
 func QToProto(q Q) *webserverv1.Q {

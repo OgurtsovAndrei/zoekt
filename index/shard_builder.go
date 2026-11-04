@@ -30,8 +30,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/languages"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/languages"
 )
 
 var _ = log.Println

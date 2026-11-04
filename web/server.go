@@ -33,13 +33,13 @@ import (
 
 	"github.com/grafana/regexp"
 
-	"github.com/sourcegraph/zoekt/index"
-	zjson "github.com/sourcegraph/zoekt/internal/json"
+	"github.com/OgurtsovAndrei/zoekt/index"
+	zjson "github.com/OgurtsovAndrei/zoekt/internal/json"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/internal/tenant/systemtenant"
-	"github.com/sourcegraph/zoekt/query"
-	"github.com/sourcegraph/zoekt/search"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant/systemtenant"
+	"github.com/OgurtsovAndrei/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt/search"
 )
 
 var Funcmap = template.FuncMap{

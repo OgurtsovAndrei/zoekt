@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package zoekt // import "github.com/sourcegraph/zoekt"
+package zoekt // import "github.com/OgurtsovAndrei/zoekt"
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/proto"
 
-	webserverv1 "github.com/sourcegraph/zoekt/grpc/protos/zoekt/webserver/v1"
+	webserverv1 "github.com/OgurtsovAndrei/zoekt/grpc/protos/zoekt/webserver/v1"
 )
 
 func TestProtoRoundtrip(t *testing.T) {

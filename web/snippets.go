@@ -22,7 +22,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/sourcegraph/zoekt"
+	"github.com/OgurtsovAndrei/zoekt"
 )
 
 func (s *Server) formatResults(result *zoekt.SearchResult, query string, localPrint bool) ([]*FileMatch, error) {

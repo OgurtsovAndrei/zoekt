@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 // defaultTimeout is the maximum amount of time a search request should

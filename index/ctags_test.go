@@ -19,8 +19,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sourcegraph/zoekt/internal/ctags"
-	"github.com/sourcegraph/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt/internal/ctags"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
 )
 
 func TestTagsToSections(t *testing.T) {

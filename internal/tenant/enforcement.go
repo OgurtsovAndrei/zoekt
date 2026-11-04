@@ -3,7 +3,7 @@ package tenant
 import (
 	"os"
 
-	"github.com/sourcegraph/zoekt/internal/tenant/internal/enforcement"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant/internal/enforcement"
 )
 
 func enforceTenant() bool {

@@ -20,8 +20,8 @@ import (
 	"github.com/go-git/go-git/v5"
 	"golang.org/x/net/trace"
 
-	"github.com/sourcegraph/zoekt"
-	configv1 "github.com/sourcegraph/zoekt/cmd/zoekt-sourcegraph-indexserver/grpc/protos/sourcegraph/zoekt/configuration/v1"
+	"github.com/OgurtsovAndrei/zoekt"
+	configv1 "github.com/OgurtsovAndrei/zoekt/cmd/zoekt-sourcegraph-indexserver/grpc/protos/sourcegraph/zoekt/configuration/v1"
 )
 
 // SourcegraphListResult is the return value of Sourcegraph.List. It is its

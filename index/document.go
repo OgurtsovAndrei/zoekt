@@ -1,6 +1,6 @@
 package index
 
-import "github.com/sourcegraph/zoekt"
+import "github.com/OgurtsovAndrei/zoekt"
 
 // Document holds a document (file) to index.
 type Document struct {

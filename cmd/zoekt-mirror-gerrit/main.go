@@ -35,7 +35,7 @@ import (
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 
-	"github.com/sourcegraph/zoekt/gitindex"
+	"github.com/OgurtsovAndrei/zoekt/gitindex"
 )
 
 type loggingRT struct {

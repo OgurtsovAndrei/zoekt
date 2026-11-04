@@ -39,9 +39,9 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage/filesystem"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/ignore"
-	"github.com/sourcegraph/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/ignore"
+	"github.com/OgurtsovAndrei/zoekt/index"
 
 	git "github.com/go-git/go-git/v5"
 )

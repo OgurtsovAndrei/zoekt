@@ -17,7 +17,7 @@ package web
 import (
 	"time"
 
-	"github.com/sourcegraph/zoekt"
+	"github.com/OgurtsovAndrei/zoekt"
 )
 
 type ApiSearchResult struct {

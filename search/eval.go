@@ -3,10 +3,10 @@ package search
 import (
 	"context"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/internal/tenant"
-	"github.com/sourcegraph/zoekt/internal/trace"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant"
+	"github.com/OgurtsovAndrei/zoekt/internal/trace"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 // typeRepoSearcher evaluates all type:repo sub-queries before sending the query

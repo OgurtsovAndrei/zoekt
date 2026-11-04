@@ -16,10 +16,10 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
-	"github.com/sourcegraph/zoekt/grpc/internalerrs"
-	"github.com/sourcegraph/zoekt/grpc/messagesize"
-	"github.com/sourcegraph/zoekt/grpc/propagator"
-	"github.com/sourcegraph/zoekt/internal/tenant"
+	"github.com/OgurtsovAndrei/zoekt/grpc/internalerrs"
+	"github.com/OgurtsovAndrei/zoekt/grpc/messagesize"
+	"github.com/OgurtsovAndrei/zoekt/grpc/propagator"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant"
 )
 
 func NewServer(logger sglog.Logger, additionalOpts ...grpc.ServerOption) *grpc.Server {

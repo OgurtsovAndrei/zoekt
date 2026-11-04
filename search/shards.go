@@ -34,11 +34,11 @@ import (
 	"go.uber.org/atomic"
 	"golang.org/x/sync/semaphore"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/index"
-	"github.com/sourcegraph/zoekt/internal/tenant/systemtenant"
-	"github.com/sourcegraph/zoekt/internal/trace"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant/systemtenant"
+	"github.com/OgurtsovAndrei/zoekt/internal/trace"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 var (

@@ -20,7 +20,7 @@ import (
 
 	sglog "github.com/sourcegraph/log"
 
-	"github.com/sourcegraph/zoekt"
+	"github.com/OgurtsovAndrei/zoekt"
 )
 
 // gitRepoCache manages the acquisition and lifetime of shallow Git clones.

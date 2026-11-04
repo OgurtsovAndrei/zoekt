@@ -21,10 +21,10 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 	"google.golang.org/grpc"
 
-	"github.com/sourcegraph/zoekt"
-	configv1 "github.com/sourcegraph/zoekt/cmd/zoekt-sourcegraph-indexserver/grpc/protos/sourcegraph/zoekt/configuration/v1"
-	"github.com/sourcegraph/zoekt/index"
-	"github.com/sourcegraph/zoekt/internal/tenant"
+	"github.com/OgurtsovAndrei/zoekt"
+	configv1 "github.com/OgurtsovAndrei/zoekt/cmd/zoekt-sourcegraph-indexserver/grpc/protos/sourcegraph/zoekt/configuration/v1"
+	"github.com/OgurtsovAndrei/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant"
 )
 
 func TestServer_defaultArgs(t *testing.T) {

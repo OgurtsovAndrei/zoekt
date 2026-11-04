@@ -21,8 +21,8 @@ import (
 
 	"github.com/RoaringBitmap/roaring/v2"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 const (

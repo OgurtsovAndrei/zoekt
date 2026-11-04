@@ -9,7 +9,7 @@ import (
 
 	"github.com/grafana/regexp"
 
-	"github.com/sourcegraph/zoekt/internal/hybridre2"
+	"github.com/OgurtsovAndrei/zoekt/internal/hybridre2"
 )
 
 const (

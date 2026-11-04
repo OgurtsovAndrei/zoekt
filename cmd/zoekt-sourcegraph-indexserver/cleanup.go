@@ -14,8 +14,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	sglog "github.com/sourcegraph/log"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/index"
 )
 
 var metricCleanupDuration = promauto.NewHistogram(prometheus.HistogramOpts{

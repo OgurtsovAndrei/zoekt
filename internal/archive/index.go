@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/index"
 )
 
 // Options specify the archive specific indexing options.

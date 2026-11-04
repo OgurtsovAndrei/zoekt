@@ -10,10 +10,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sourcegraph/zoekt"
-	zjson "github.com/sourcegraph/zoekt/internal/json"
-	"github.com/sourcegraph/zoekt/internal/mockSearcher"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	zjson "github.com/OgurtsovAndrei/zoekt/internal/json"
+	"github.com/OgurtsovAndrei/zoekt/internal/mockSearcher"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 func TestClientServer(t *testing.T) {

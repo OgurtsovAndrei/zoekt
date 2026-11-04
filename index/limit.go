@@ -4,7 +4,7 @@ import (
 	"log"
 	"slices"
 
-	"github.com/sourcegraph/zoekt"
+	"github.com/OgurtsovAndrei/zoekt"
 )
 
 // SortAndTruncateFiles is a convenience around SortFiles and

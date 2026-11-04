@@ -20,7 +20,7 @@ import (
 
 	git "github.com/go-git/go-git/v5"
 
-	"github.com/sourcegraph/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
 )
 
 func TestSetRemote(t *testing.T) {

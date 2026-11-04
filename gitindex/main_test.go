@@ -3,7 +3,7 @@ package gitindex
 import (
 	"testing"
 
-	"github.com/sourcegraph/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
 )
 
 func TestMain(m *testing.M) {

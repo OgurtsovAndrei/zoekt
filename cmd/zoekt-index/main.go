@@ -27,10 +27,10 @@ import (
 
 	"go.uber.org/automaxprocs/maxprocs"
 
-	"github.com/sourcegraph/zoekt/cmd"
-	"github.com/sourcegraph/zoekt/ignore"
-	"github.com/sourcegraph/zoekt/index"
-	"github.com/sourcegraph/zoekt/internal/tenant"
+	"github.com/OgurtsovAndrei/zoekt/cmd"
+	"github.com/OgurtsovAndrei/zoekt/ignore"
+	"github.com/OgurtsovAndrei/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant"
 )
 
 type fileInfo struct {

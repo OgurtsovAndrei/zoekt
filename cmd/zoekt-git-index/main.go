@@ -28,10 +28,10 @@ import (
 	"github.com/dustin/go-humanize"
 	"go.uber.org/automaxprocs/maxprocs"
 
-	"github.com/sourcegraph/zoekt/cmd"
-	"github.com/sourcegraph/zoekt/gitindex"
-	"github.com/sourcegraph/zoekt/internal/ctags"
-	"github.com/sourcegraph/zoekt/internal/profiler"
+	"github.com/OgurtsovAndrei/zoekt/cmd"
+	"github.com/OgurtsovAndrei/zoekt/gitindex"
+	"github.com/OgurtsovAndrei/zoekt/internal/ctags"
+	"github.com/OgurtsovAndrei/zoekt/internal/profiler"
 )
 
 func run() int {

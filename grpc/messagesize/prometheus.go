@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/sourcegraph/zoekt/grpc/grpcutil"
+	"github.com/OgurtsovAndrei/zoekt/grpc/grpcutil"
 )
 
 var (

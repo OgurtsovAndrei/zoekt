@@ -45,9 +45,9 @@ import (
 	"github.com/google/slothfs/manifest"
 	"go.uber.org/automaxprocs/maxprocs"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/gitindex"
-	"github.com/sourcegraph/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/gitindex"
+	"github.com/OgurtsovAndrei/zoekt/index"
 )
 
 var _ = log.Println

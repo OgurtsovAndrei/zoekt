@@ -43,9 +43,9 @@ import (
 
 	"maps"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/internal/ctags"
-	"github.com/sourcegraph/zoekt/internal/tenant"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/internal/ctags"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant"
 )
 
 var DefaultDir = filepath.Join(os.Getenv("HOME"), ".zoekt")

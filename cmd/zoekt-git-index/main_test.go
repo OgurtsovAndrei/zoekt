@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sourcegraph/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
 )
 
 func TestRunIndexesEachRepoUnderItsOwnName(t *testing.T) {

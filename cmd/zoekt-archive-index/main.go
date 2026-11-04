@@ -13,8 +13,8 @@ import (
 
 	"go.uber.org/automaxprocs/maxprocs"
 
-	"github.com/sourcegraph/zoekt/cmd"
-	"github.com/sourcegraph/zoekt/internal/archive"
+	"github.com/OgurtsovAndrei/zoekt/cmd"
+	"github.com/OgurtsovAndrei/zoekt/internal/archive"
 )
 
 func main() {

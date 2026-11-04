@@ -8,8 +8,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/index"
 )
 
 // mergeMeta updates the .meta files for the shards on disk for o.

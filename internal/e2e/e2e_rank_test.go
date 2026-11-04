@@ -15,12 +15,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/index"
-	"github.com/sourcegraph/zoekt/internal/archive"
-	"github.com/sourcegraph/zoekt/internal/testutil"
-	"github.com/sourcegraph/zoekt/query"
-	"github.com/sourcegraph/zoekt/search"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/internal/archive"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt/search"
 )
 
 var update = flag.Bool("update", false, "update golden file")

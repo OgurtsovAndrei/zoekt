@@ -26,7 +26,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sourcegraph/zoekt"
+	"github.com/OgurtsovAndrei/zoekt"
 
 	"github.com/RoaringBitmap/roaring/v2"
 )

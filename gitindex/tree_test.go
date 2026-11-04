@@ -30,11 +30,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/grafana/regexp"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/index"
-	"github.com/sourcegraph/zoekt/internal/testutil"
-	"github.com/sourcegraph/zoekt/query"
-	"github.com/sourcegraph/zoekt/search"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/internal/testutil"
+	"github.com/OgurtsovAndrei/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt/search"
 )
 
 func createSubmoduleRepo(dir string) error {

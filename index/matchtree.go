@@ -25,10 +25,10 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/grafana/regexp"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/internal/hybridre2"
-	"github.com/sourcegraph/zoekt/internal/syntaxutil"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/internal/hybridre2"
+	"github.com/OgurtsovAndrei/zoekt/internal/syntaxutil"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 // A docIterator iterates over documents in order.

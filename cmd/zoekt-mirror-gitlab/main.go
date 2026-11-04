@@ -36,7 +36,7 @@ import (
 
 	gitlab "gitlab.com/gitlab-org/api/client-go"
 
-	"github.com/sourcegraph/zoekt/gitindex"
+	"github.com/OgurtsovAndrei/zoekt/gitindex"
 )
 
 func main() {

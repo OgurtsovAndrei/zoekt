@@ -26,9 +26,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/gitindex"
-	"github.com/sourcegraph/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/gitindex"
+	"github.com/OgurtsovAndrei/zoekt/index"
 )
 
 type shardInfo struct {

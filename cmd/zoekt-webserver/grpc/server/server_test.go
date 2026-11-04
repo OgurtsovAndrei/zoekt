@@ -20,12 +20,12 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/grpc/grpcutil"
-	webserverv1 "github.com/sourcegraph/zoekt/grpc/protos/zoekt/webserver/v1"
-	"github.com/sourcegraph/zoekt/internal/mockSearcher"
-	"github.com/sourcegraph/zoekt/internal/shardtest"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/grpc/grpcutil"
+	webserverv1 "github.com/OgurtsovAndrei/zoekt/grpc/protos/zoekt/webserver/v1"
+	"github.com/OgurtsovAndrei/zoekt/internal/mockSearcher"
+	"github.com/OgurtsovAndrei/zoekt/internal/shardtest"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 func TestClientServer(t *testing.T) {

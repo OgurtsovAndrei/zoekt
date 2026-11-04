@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sourcegraph/zoekt"
+	"github.com/OgurtsovAndrei/zoekt"
 )
 
 func TestCollectSenderUnlimitedSortsOnDone(t *testing.T) {

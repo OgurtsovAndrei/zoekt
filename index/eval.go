@@ -25,10 +25,10 @@ import (
 
 	"github.com/grafana/regexp"
 
-	"github.com/sourcegraph/zoekt"
-	"github.com/sourcegraph/zoekt/internal/tenant"
-	"github.com/sourcegraph/zoekt/languages"
-	"github.com/sourcegraph/zoekt/query"
+	"github.com/OgurtsovAndrei/zoekt"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant"
+	"github.com/OgurtsovAndrei/zoekt/languages"
+	"github.com/OgurtsovAndrei/zoekt/query"
 )
 
 // simplifyMultiRepo takes a query and a predicate. It returns Const(true) if all

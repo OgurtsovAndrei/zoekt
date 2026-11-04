@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/sourcegraph/zoekt"
+	"github.com/OgurtsovAndrei/zoekt"
 )
 
 // hitIterator finds potential search matches, measured in offsets of

@@ -13,8 +13,8 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
 
-	"github.com/sourcegraph/zoekt/grpc/propagator"
-	"github.com/sourcegraph/zoekt/internal/tenant/internal/tenanttype"
+	"github.com/OgurtsovAndrei/zoekt/grpc/propagator"
+	"github.com/OgurtsovAndrei/zoekt/internal/tenant/internal/tenanttype"
 )
 
 const (

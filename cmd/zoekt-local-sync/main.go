@@ -27,8 +27,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/sourcegraph/zoekt/gitindex"
-	"github.com/sourcegraph/zoekt/index"
+	"github.com/OgurtsovAndrei/zoekt/gitindex"
+	"github.com/OgurtsovAndrei/zoekt/index"
 )
 
 const lockFileName = ".zoekt-local-sync.lock"

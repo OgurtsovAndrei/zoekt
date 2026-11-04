@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	newsv1 "github.com/sourcegraph/zoekt/grpc/testprotos/news/v1"
+	newsv1 "github.com/OgurtsovAndrei/zoekt/grpc/testprotos/news/v1"
 )
 
 func TestCallBackClientStream(t *testing.T) {

@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sourcegraph/zoekt/internal/syntaxutil"
+	"github.com/OgurtsovAndrei/zoekt/internal/syntaxutil"
 )
 
 var opnames = map[syntax.Op]string{
