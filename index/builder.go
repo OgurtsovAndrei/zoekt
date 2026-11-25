@@ -126,12 +126,12 @@ type Options struct {
 
 	// PEFMinPostings sets the minimum posting list length to encode using PISA
 	// Partitioned Elias-Fano (PEF). 0 means unset (resolved from
-	// ZOEKT_PEF_MIN_POSTINGS or defaultPEFMinPostings = 1024), < 0 disables PEF
+	// ZOEKT_PEF_MIN_POSTINGS or defaultPEFMinPostings = 4096), < 0 disables PEF
 	// (delta-varint only), and > 0 sets an explicit threshold.
 	PEFMinPostings int
 }
 
-const defaultPEFMinPostings = 1024
+const defaultPEFMinPostings = 4096
 
 func resolvePEFMinPostings(configured int) int {
 	if configured < 0 {
