@@ -177,9 +177,12 @@ func (s *pefPartitionScratch) reset(size uint32) {
 	need := int(size) + 1
 	if cap(s.minCost) < need {
 		s.minCost = make([]uint64, need)
-		s.path = make([]uint32, need)
 	} else {
 		s.minCost = s.minCost[:need]
+	}
+	if cap(s.path) < need {
+		s.path = make([]uint32, need)
+	} else {
 		s.path = s.path[:need]
 		clear(s.path)
 	}

@@ -72,26 +72,242 @@ func TestPEFPartitionContiguousAndOutlier(t *testing.T) {
 }
 
 func TestPEFPartitionNearMaxUint32(t *testing.T) {
-	keys := []uint32{
-		math.MaxUint32 - 100000,
-		math.MaxUint32 - 10,
-		math.MaxUint32 - 9,
-		math.MaxUint32 - 8,
-		math.MaxUint32 - 7,
-		math.MaxUint32 - 1,
-		math.MaxUint32,
-	}
-	var s pefPartitionScratch
-	got := s.partition(keys, defaultPEFPartitionConfig(), nil)
-	if len(got) == 0 || got[len(got)-1] != uint32(len(keys)) {
-		t.Fatalf("partition = %v, want non-empty ending at %d", got, len(keys))
+	t.Run("small_near_max", func(t *testing.T) {
+		keys := []uint32{
+			math.MaxUint32 - 100000,
+			math.MaxUint32 - 10,
+			math.MaxUint32 - 9,
+			math.MaxUint32 - 8,
+			math.MaxUint32 - 7,
+			math.MaxUint32 - 1,
+			math.MaxUint32,
+		}
+		var s pefPartitionScratch
+		got := s.partition(keys, defaultPEFPartitionConfig(), nil)
+		assertValidPartition(t, got, uint32(len(keys)))
+	})
+
+	t.Run("cross_superblock_near_max", func(t *testing.T) {
+		// superSize = 112; 250 keys (> 2*superSize) ending at math.MaxUint32 exercises
+		// superBase = superLastKey + 1 across superblock boundaries near MaxUint32.
+		const n = 250
+		keys := make([]uint32, n)
+		cur := uint32(math.MaxUint32) - 5000
+		for i := range keys {
+			if i%50 == 0 && i > 0 {
+				cur += 200
+			} else {
+				cur++
+			}
+			keys[i] = cur
+		}
+		// Shift so the final key lands exactly on math.MaxUint32.
+		shift := uint32(math.MaxUint32) - keys[n-1]
+		for i := range keys {
+			keys[i] += shift
+		}
+
+		cfg := pefPartitionConfig{Eps1: 0.03, Eps2: 0.3, Eps3: 1.0, FixCost: 112}
+		var s pefPartitionScratch
+		got := s.partition(keys, cfg, nil)
+		assertValidPartition(t, got, n)
+		if len(got) < 2 {
+			t.Fatalf("expected multiple chunks across superblocks near MaxUint32, got %v", got)
+		}
+
+		// Also exercise superBase = (MaxUint32 - 2) + 1 = MaxUint32 - 1 directly.
+		tinyCfg := pefPartitionConfig{Eps1: 0.03, Eps2: 0.3, Eps3: 1.0, FixCost: 2} // superSize = 2
+		tinyKeys := []uint32{
+			math.MaxUint32 - 3,
+			math.MaxUint32 - 2,
+			math.MaxUint32 - 1,
+			math.MaxUint32,
+		}
+		gotTiny := s.partition(tinyKeys, tinyCfg, nil)
+		assertValidPartition(t, gotTiny, uint32(len(tinyKeys)))
+	})
+}
+
+func assertValidPartition(t *testing.T, ends []uint32, n uint32) {
+	t.Helper()
+	if len(ends) == 0 || ends[len(ends)-1] != n {
+		t.Fatalf("partition = %v, want non-empty ending at %d", ends, n)
 	}
 	prev := uint32(0)
-	for i, end := range got {
-		if end <= prev || end > uint32(len(keys)) {
-			t.Fatalf("invalid end[%d]=%d (prev=%d, n=%d)", i, end, prev, len(keys))
+	for i, end := range ends {
+		if end <= prev || end > n {
+			t.Fatalf("invalid end[%d]=%d (prev=%d, n=%d)", i, end, prev, n)
 		}
 		prev = end
+	}
+}
+
+func TestPEFPartitionScratchGrowAndReuse(t *testing.T) {
+	makeContiguous := func(n int) []uint32 {
+		ks := make([]uint32, n)
+		for i := range ks {
+			ks[i] = uint32(i * 3)
+		}
+		return ks
+	}
+
+	var s pefPartitionScratch
+	cfg := defaultPEFPartitionConfig()
+
+	// Size 100 -> need=101; Go rounds minCost ([]uint64) and path ([]uint32)
+	// to different allocator size classes (cap(minCost)=112, cap(path)=104).
+	// Next call with size 107 (need=108) must reallocate path without panicking.
+	out := s.partition(makeContiguous(100), cfg, nil)
+	assertValidPartition(t, out, 100)
+
+	out = s.partition(makeContiguous(107), cfg, out[:0])
+	assertValidPartition(t, out, 107)
+
+	// Grow step-by-step across all allocator size classes 1..256 on a fresh scratch.
+	var growScratch pefPartitionScratch
+	var growOut []uint32
+	all256 := makeContiguous(256)
+	for sz := 1; sz <= 256; sz++ {
+		growOut = growScratch.partition(all256[:sz], cfg, growOut[:0])
+		assertValidPartition(t, growOut, uint32(sz))
+	}
+
+	// Explicitly exercise mismatched capacities (cap(minCost) > cap(path)),
+	// which Go's runtime allocator can produce via independent size classes.
+	mismatchScratch := pefPartitionScratch{
+		minCost: make([]uint64, 0, 200),
+		path:    make([]uint32, 0, 100),
+	}
+	mismatchOut := mismatchScratch.partition(makeContiguous(150), cfg, nil)
+	assertValidPartition(t, mismatchOut, 150)
+
+	keys1000 := makeContiguous(1000)
+	out = s.partition(keys1000, cfg, out[:0])
+	assertValidPartition(t, out, 1000)
+
+	out = s.partition(makeContiguous(500), cfg, out[:0])
+	assertValidPartition(t, out, 500)
+
+	// Warm up at 1000 again, then assert 0 allocs on steady-state reuse.
+	out = s.partition(keys1000, cfg, out[:0])
+	expected := append([]uint32(nil), out...)
+	allocs := testing.AllocsPerRun(5, func() {
+		out = s.partition(keys1000, cfg, out[:0])
+	})
+	if allocs != 0 {
+		t.Fatalf("steady-state allocs = %v, want 0", allocs)
+	}
+	if !reflect.DeepEqual(out, expected) {
+		t.Fatalf("reused partition output differed")
+	}
+}
+
+func exactPEFPartitionCost(keys []uint32, fixCost uint64) uint64 {
+	n := len(keys)
+	if n == 0 {
+		return 0
+	}
+	dp := make([]uint64, n+1)
+	for i := 1; i <= n; i++ {
+		dp[i] = ^uint64(0)
+	}
+	for i := 0; i < n; i++ {
+		base := uint64(keys[0])
+		if i > 0 {
+			base = uint64(keys[i-1]) + 1
+		}
+		for j := i + 1; j <= n; j++ {
+			lastRel := uint64(keys[j-1]) - base
+			c := dp[i] + pefMinCodecBitsize(lastRel, uint64(j-i)) + fixCost
+			if c < dp[j] {
+				dp[j] = c
+			}
+		}
+	}
+	return dp[n]
+}
+
+func evalPEFPartitionCost(keys, ends []uint32, fixCost uint64) uint64 {
+	var total uint64
+	prev := uint32(0)
+	base := uint64(keys[0])
+	for _, end := range ends {
+		lastKey := uint64(keys[end-1])
+		total += pefMinCodecBitsize(lastKey-base, uint64(end-prev)) + fixCost
+		prev = end
+		base = lastKey + 1
+	}
+	return total
+}
+
+func TestPEFPartitionDPExactComparisonAndTailMerge(t *testing.T) {
+	cfg := defaultPEFPartitionConfig()
+
+	// Mixed sequence: contiguous run, dense-with-gaps, sparse run, outlier, another run.
+	var mixed []uint32
+	for i := uint32(0); i < 60; i++ {
+		mixed = append(mixed, i)
+	}
+	cur := uint32(65)
+	for i := 0; i < 50; i++ {
+		if i%2 == 0 {
+			cur += 2
+		} else {
+			cur += 3
+		}
+		mixed = append(mixed, cur)
+	}
+	cur += 50000
+	for i := 0; i < 40; i++ {
+		mixed = append(mixed, cur)
+		cur += 400
+	}
+	mixed = append(mixed, cur+1000000)
+	cur += 1000001
+	for i := uint32(0); i < 50; i++ {
+		mixed = append(mixed, cur+i)
+	}
+
+	var s pefPartitionScratch
+	got := s.partition(mixed, cfg, nil)
+	assertValidPartition(t, got, uint32(len(mixed)))
+
+	exactCost := exactPEFPartitionCost(mixed, cfg.FixCost)
+	gotCost := evalPEFPartitionCost(mixed, got, cfg.FixCost)
+	if gotCost < exactCost {
+		t.Fatalf("gotCost=%d < exactCost=%d (impossible)", gotCost, exactCost)
+	}
+	maxAllowed := float64(exactCost) * (1 + cfg.Eps1) * (1 + cfg.Eps2)
+	if float64(gotCost) > maxAllowed {
+		t.Fatalf("gotCost=%d exceeds (1+eps1)*(1+eps2)*exactCost=%.1f (exact=%d)", gotCost, maxAllowed, exactCost)
+	}
+
+	// Tail-merge boundary checks using superSize = 112 (FixCost=112, Eps3=1.0).
+	tailCfg := pefPartitionConfig{Eps1: 0.03, Eps2: 0.3, Eps3: 1.0, FixCost: 112}
+	superSize := pefSuperblockSize(tailCfg.FixCost, tailCfg.Eps3)
+	if superSize != 112 {
+		t.Fatalf("unexpected superSize=%d, want 112", superSize)
+	}
+
+	// n = superSize + 1 contiguous keys: tail of 1 is merged into 1 superblock → single AllOnes chunk.
+	contigPlusOne := make([]uint32, superSize+1)
+	for i := range contigPlusOne {
+		contigPlusOne[i] = uint32(i)
+	}
+	gotMerged := s.partition(contigPlusOne, tailCfg, nil)
+	if !reflect.DeepEqual(gotMerged, []uint32{uint32(superSize + 1)}) {
+		t.Fatalf("n=superSize+1 contiguous partition = %v, want [%d]", gotMerged, superSize+1)
+	}
+
+	// n = 2*superSize contiguous keys: remaining tail == superSize is NOT merged → splits at superSize.
+	contigTwoSupers := make([]uint32, 2*superSize)
+	for i := range contigTwoSupers {
+		contigTwoSupers[i] = uint32(i)
+	}
+	gotTwo := s.partition(contigTwoSupers, tailCfg, nil)
+	wantTwo := []uint32{uint32(superSize), uint32(2 * superSize)}
+	if !reflect.DeepEqual(gotTwo, wantTwo) {
+		t.Fatalf("n=2*superSize contiguous partition = %v, want %v", gotTwo, wantTwo)
 	}
 }
 
