@@ -81,6 +81,13 @@ func writeUint32Bitmap(w *writer, dat []uint32) {
 func writePostings(w *writer, s *postingsBuilder, ngramText *simpleSection,
 	charOffsets *simpleSection, postings *compoundSection, endRunes *simpleSection,
 ) {
+	writePostingsWithPEF(w, s, ngramText, charOffsets, postings, endRunes, nil, -1)
+}
+
+func writePostingsWithPEF(w *writer, s *postingsBuilder, ngramText *simpleSection,
+	charOffsets *simpleSection, postings *compoundSection, endRunes *simpleSection,
+	pefBitmap *simpleSection, pefMinPostings int,
+) {
 	// Collect ngrams from both the ASCII direct-indexed array and the
 	// non-ASCII map, then sort by ngram value.
 	type ngramPosting struct {
@@ -109,8 +116,27 @@ func writePostings(w *writer, s *postingsBuilder, ngramText *simpleSection,
 	}
 	ngramText.end(w)
 
+	var enc *pefEncoder
+	var bitmap []byte
+	allowPEF := pefBitmap != nil && pefMinPostings > 0
+
 	postings.start(w)
-	for _, np := range all {
+	for i, np := range all {
+		// Each delta-varint posting occupies >= 1 byte, so len < pefMinPostings
+		// guarantees posting count < pefMinPostings without decoding varints.
+		if allowPEF && len(np.pl.data) >= pefMinPostings {
+			if enc == nil {
+				enc = newPEFEncoder(resolvePEFPartitionConfig())
+			}
+			if blob, _, ok := enc.encodeFromDeltas(np.pl.data, pefMinPostings); ok {
+				postings.addItem(w, blob)
+				if bitmap == nil {
+					bitmap = make([]byte, (len(all)+7)/8)
+				}
+				bitmap[i>>3] |= 1 << (uint(i) & 7)
+				continue
+			}
+		}
 		postings.addItem(w, np.pl.data)
 	}
 	postings.end(w)
@@ -122,6 +148,12 @@ func writePostings(w *writer, s *postingsBuilder, ngramText *simpleSection,
 	endRunes.start(w)
 	w.Write(toSizedDeltas(s.endRunes))
 	endRunes.end(w)
+
+	if pefBitmap != nil && len(bitmap) > 0 {
+		pefBitmap.start(w)
+		w.Write(bitmap)
+		pefBitmap.end(w)
+	}
 }
 
 func (b *ShardBuilder) Write(out io.Writer) error {
@@ -166,7 +198,7 @@ func (b *ShardBuilder) Write(out io.Writer) error {
 	}
 	toc.fileSections.end(w)
 
-	writePostings(w, b.contentPostings, &toc.ngramText, &toc.runeOffsets, &toc.postings, &toc.fileEndRunes)
+	writePostingsWithPEF(w, b.contentPostings, &toc.ngramText, &toc.runeOffsets, &toc.postings, &toc.fileEndRunes, &toc.postingsPEFBitmap, b.pefMinPostings)
 
 	// names.
 	toc.fileNames.writeStrings(w, b.nameStrings)
@@ -210,11 +242,16 @@ func (b *ShardBuilder) Write(out io.Writer) error {
 		indexTime = time.Now().UTC()
 	}
 
+	minReaderVersion := WriteMinFeatureVersion
+	if toc.postingsPEFBitmap.sz > 0 {
+		minReaderVersion = FeatureVersion
+	}
+
 	if err := b.writeJSON(&zoekt.IndexMetadata{
 		IndexFormatVersion:    b.indexFormatVersion,
 		IndexTime:             indexTime,
 		IndexFeatureVersion:   b.featureVersion,
-		IndexMinReaderVersion: WriteMinFeatureVersion,
+		IndexMinReaderVersion: minReaderVersion,
 		PlainASCII:            b.contentPostings.isPlainASCII && b.namePostings.isPlainASCII,
 		LanguageMap:           b.languageMap,
 		ZoektVersion:          Version,

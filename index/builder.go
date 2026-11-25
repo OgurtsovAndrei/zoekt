@@ -123,6 +123,69 @@ type Options struct {
 	//
 	// Note: heap checking is "best effort", and it's possible for the process to OOM without triggering the heap profile.
 	HeapProfileTriggerBytes uint64
+
+	// PEFMinPostings sets the minimum posting list length to encode using PISA
+	// Partitioned Elias-Fano (PEF). 0 means unset (resolved from
+	// ZOEKT_PEF_MIN_POSTINGS or defaultPEFMinPostings = 1024), < 0 disables PEF
+	// (delta-varint only), and > 0 sets an explicit threshold.
+	PEFMinPostings int
+}
+
+const defaultPEFMinPostings = 1024
+
+func resolvePEFMinPostings(configured int) int {
+	if configured < 0 {
+		return -1
+	}
+	if configured > 0 {
+		return configured
+	}
+	raw := strings.TrimSpace(os.Getenv("ZOEKT_PEF_MIN_POSTINGS"))
+	if raw == "" {
+		return defaultPEFMinPostings
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		slog.Warn("invalid ZOEKT_PEF_MIN_POSTINGS, using default", "value", raw, "default", defaultPEFMinPostings, "error", err)
+		return defaultPEFMinPostings
+	}
+	if v <= 0 {
+		return -1
+	}
+	return v
+}
+
+func resolvePEFPartitionConfig() pefPartitionConfig {
+	cfg := defaultPEFPartitionConfig()
+	if raw := strings.TrimSpace(os.Getenv("ZOEKT_PEF_FIX_COST")); raw != "" {
+		if v, err := strconv.ParseUint(raw, 10, 64); err != nil {
+			slog.Warn("invalid ZOEKT_PEF_FIX_COST, using default", "value", raw, "error", err)
+			return defaultPEFPartitionConfig()
+		} else {
+			cfg.FixCost = v
+		}
+	}
+	if raw := strings.TrimSpace(os.Getenv("ZOEKT_PEF_EPS1")); raw != "" {
+		if v, err := strconv.ParseFloat(raw, 64); err != nil {
+			slog.Warn("invalid ZOEKT_PEF_EPS1, using default", "value", raw, "error", err)
+			return defaultPEFPartitionConfig()
+		} else {
+			cfg.Eps1 = v
+		}
+	}
+	if raw := strings.TrimSpace(os.Getenv("ZOEKT_PEF_EPS2")); raw != "" {
+		if v, err := strconv.ParseFloat(raw, 64); err != nil {
+			slog.Warn("invalid ZOEKT_PEF_EPS2, using default", "value", raw, "error", err)
+			return defaultPEFPartitionConfig()
+		} else {
+			cfg.Eps2 = v
+		}
+	}
+	if err := cfg.validate(); err != nil {
+		slog.Warn("invalid PEF partition config env override, using default", "error", err)
+		return defaultPEFPartitionConfig()
+	}
+	return cfg
 }
 
 // HashOptions contains only the options in Options that upon modification leads to IndexState of IndexStateMismatch during the next index building.
@@ -1154,6 +1217,7 @@ func (b *Builder) newShardBuilder() (*ShardBuilder, error) {
 	}
 	shardBuilder.IndexTime = b.indexTime
 	shardBuilder.ID = b.id
+	shardBuilder.pefMinPostings = resolvePEFMinPostings(b.opts.PEFMinPostings)
 	return shardBuilder, nil
 }
 

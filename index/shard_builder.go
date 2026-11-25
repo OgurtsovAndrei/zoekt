@@ -318,6 +318,8 @@ type ShardBuilder struct {
 
 	// a sortable 20 chars long id.
 	ID string
+
+	pefMinPostings int
 }
 
 func verify(repo *zoekt.Repository) error {
@@ -411,6 +413,7 @@ func newShardBuilderWithPostings(content, name *postingsBuilder) *ShardBuilder {
 		symIndex:        make(map[string]uint32),
 		symKindIndex:    make(map[string]uint32),
 		languageMap:     make(map[string]uint16),
+		pefMinPostings:  resolvePEFMinPostings(0),
 	}
 }
 

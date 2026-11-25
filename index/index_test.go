@@ -2992,6 +2992,7 @@ func TestIOStats(t *testing.T) {
 			Name:    "f1",
 			Content: []byte(strings.Repeat("abcd", 1024)),
 		})
+	b.pefMinPostings = -1
 
 	t.Run("LineMatches", func(t *testing.T) {
 		q := &query.Substring{Pattern: "abc", CaseSensitive: true, Content: true}
@@ -3054,6 +3055,23 @@ func TestIOStats(t *testing.T) {
 		// delta encoded.
 		if got, want := res.IndexBytesLoaded, int64(1024); got != want {
 			t.Errorf("got index I/O %d, want %d", got, want)
+		}
+	})
+
+	t.Run("PEF", func(t *testing.T) {
+		bPEF := testShardBuilder(t, nil,
+			Document{
+				Name:    "f1",
+				Content: []byte(strings.Repeat("abcd", 1024)),
+			})
+		bPEF.pefMinPostings = 1024
+		q := &query.Substring{Pattern: "abc", CaseSensitive: true, Content: true}
+		res := searchForTest(t, bPEF, q)
+		if got, want := res.ContentBytesLoaded, int64(4098); got != want {
+			t.Errorf("got content I/O %d, want %d", got, want)
+		}
+		if got, want := res.IndexBytesLoaded, int64(536); got != want {
+			t.Errorf("got PEF index I/O %d, want %d", got, want)
 		}
 	})
 }

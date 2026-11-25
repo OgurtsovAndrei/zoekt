@@ -43,7 +43,8 @@ const IndexFormatVersion = 16
 // 10: Compound shards; more flexible TOC format.
 // 11: Bloom filters for file names & contents
 // 12: go-enry for identifying file languages
-const FeatureVersion = 12
+// 13: PISA PEF posting lists (postingsPEFBitmap)
+const FeatureVersion = 13
 
 // WriteMinFeatureVersion and ReadMinFeatureVersion constrain forwards and backwards
 // compatibility. For example, if a new way to encode filenameNgrams on disk is
@@ -69,16 +70,17 @@ const ReadMinFeatureVersion = 8
 const NextIndexFormatVersion = 17
 
 type indexTOC struct {
-	fileContents compoundSection
-	fileNames    compoundSection
-	fileSections compoundSection
-	postings     compoundSection
-	newlines     compoundSection
-	ngramText    simpleSection
-	runeOffsets  simpleSection
-	fileEndRunes simpleSection
-	languages    simpleSection
-	categories   simpleSection
+	fileContents      compoundSection
+	fileNames         compoundSection
+	fileSections      compoundSection
+	postings          compoundSection
+	postingsPEFBitmap simpleSection
+	newlines          compoundSection
+	ngramText         simpleSection
+	runeOffsets       simpleSection
+	fileEndRunes      simpleSection
+	languages         simpleSection
+	categories        simpleSection
 
 	fileEndSymbol  simpleSection
 	symbolMap      lazyCompoundSection
@@ -169,6 +171,7 @@ func (t *indexTOC) sectionsTaggedList() []taggedSection {
 		{"newlines", &t.newlines},
 		{"ngramText", &t.ngramText},
 		{"postings", &t.postings},
+		{"postingsPEFBitmap", &t.postingsPEFBitmap},
 		{"nameNgramText", &t.nameNgramText},
 		{"namePostings", &t.namePostings},
 		{"branchMasks", &t.branchMasks},

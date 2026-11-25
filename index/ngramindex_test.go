@@ -44,12 +44,21 @@ func TestNgramIndex(t *testing.T) {
 				if got := ni.Get(ngramOf(i)); got != want {
 					t.Fatalf("Get(%d): got %+v, want %+v", ngramOf(i), got, want)
 				}
+				if gotSec, gotIdx := ni.GetWithIndex(ngramOf(i)); gotSec != want || gotIdx != i {
+					t.Fatalf("GetWithIndex(%d): got (%+v, %d), want (%+v, %d)", ngramOf(i), gotSec, gotIdx, want, i)
+				}
 				if got := ni.Get(ngramOf(i) + 1); got != (simpleSection{}) {
 					t.Fatalf("Get(%d): got %+v, want empty section", ngramOf(i)+1, got)
+				}
+				if gotSec, gotIdx := ni.GetWithIndex(ngramOf(i) + 1); gotSec != (simpleSection{}) || gotIdx != -1 {
+					t.Fatalf("GetWithIndex(%d): got (%+v, %d), want empty/-1", ngramOf(i)+1, gotSec, gotIdx)
 				}
 			}
 			if got := ni.Get(0); got != (simpleSection{}) {
 				t.Fatalf("Get(0): got %+v, want empty section", got)
+			}
+			if gotSec, gotIdx := ni.GetWithIndex(0); gotSec != (simpleSection{}) || gotIdx != -1 {
+				t.Fatalf("GetWithIndex(0): got (%+v, %d), want empty/-1", gotSec, gotIdx)
 			}
 
 			m := ni.DumpMap()

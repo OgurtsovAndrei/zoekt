@@ -59,14 +59,22 @@ func (b ngramIndex) SizeBytes() int {
 }
 
 // Get returns the simple section of the posting list associated with the
-// ngram. The logic is as follows:
+// ngram.
+func (b ngramIndex) Get(ng ngram) simpleSection {
+	sec, _ := b.GetWithIndex(ng)
+	return sec
+}
+
+// GetWithIndex returns the simple section of the posting list associated with
+// ng and its 0-based index in the sorted ngram table, or (simpleSection{}, -1)
+// if ng is not present. The logic is as follows:
 // 1. Binary search the first ngram of every bucket to find the bucket that may contain ng (in MEM)
 // 2. Read the bucket from disk (1 disk access)
 // 3. Binary search the bucket (in MEM)
 // 4. Return the simple section pointing to the posting list (1 disk access)
-func (b ngramIndex) Get(ng ngram) simpleSection {
+func (b ngramIndex) GetWithIndex(ng ngram) (simpleSection, int) {
 	if b.ngramSec.sz == 0 {
-		return simpleSection{}
+		return simpleSection{}, -1
 	}
 
 	// find bucket
@@ -78,7 +86,7 @@ func (b ngramIndex) Get(ng ngram) simpleSection {
 	off, sz := b.getBucket(bucketIndex)
 	bucket, err := b.file.Read(off, sz)
 	if err != nil {
-		return simpleSection{}
+		return simpleSection{}, -1
 	}
 
 	// find ngram in bucket
@@ -94,10 +102,11 @@ func (b ngramIndex) Get(ng ngram) simpleSection {
 
 	// return associated posting list
 	if x >= bucketSize || getNGram(x) != ng {
-		return simpleSection{}
+		return simpleSection{}, -1
 	}
 
-	return b.getPostingList(bucketIndex*ngramBucketSize + x)
+	idx := bucketIndex*ngramBucketSize + x
+	return b.getPostingList(idx), idx
 }
 
 // getPostingList returns the simple section pointing to the posting list of

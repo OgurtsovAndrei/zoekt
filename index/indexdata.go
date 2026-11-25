@@ -37,7 +37,8 @@ type indexData struct {
 
 	file IndexFile
 
-	contentNgrams ngramIndex
+	contentNgrams     ngramIndex
+	postingsPEFBitmap []byte
 
 	newlinesStart uint32
 	newlinesIndex []uint32
@@ -340,6 +341,7 @@ func (d *indexData) memoryUse() int {
 	sz += d.fileNameRuneOffsets.sizeBytes()
 	sz += len(d.languages)
 	sz += len(d.checksums)
+	sz += len(d.postingsPEFBitmap)
 	sz += 2 * len(d.repos)
 	sz += 8 * len(d.runeDocSections)
 	sz += 8 * len(d.fileBranchMasks)
@@ -512,6 +514,17 @@ func (d *indexData) iterateNgrams(query *query.Substring) (*ngramIterationResult
 		substrBytes:   patBytes,
 		substrLowered: lowerPatBytes,
 	}, nil
+}
+
+func (d *indexData) isPEFPosting(idx int) bool {
+	if idx < 0 {
+		return false
+	}
+	byteIdx := idx >> 3
+	if byteIdx >= len(d.postingsPEFBitmap) {
+		return false
+	}
+	return d.postingsPEFBitmap[byteIdx]&(1<<(uint(idx)&7)) != 0
 }
 
 func (d *indexData) fileName(i uint32) []byte {

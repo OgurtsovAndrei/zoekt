@@ -331,6 +331,11 @@ func (r *reader) readIndexData(toc *indexTOC) (*indexData, error) {
 		return nil, err
 	}
 
+	d.postingsPEFBitmap, err = d.readSectionBlob(toc.postingsPEFBitmap)
+	if err != nil {
+		return nil, err
+	}
+
 	d.fileBranchMasks, err = readSectionU64(d.file, toc.branchMasks)
 	if err != nil {
 		return nil, err

@@ -122,22 +122,27 @@ func (d *indexData) trigramHitIterator(ng ngram, caseSensitive, fileName bool) (
 	ngramLookups := 0
 	ngrams := d.ngrams(fileName)
 	for _, v := range variants {
-		sec := ngrams.Get(v)
+		sec, idx := ngrams.GetWithIndex(v)
 		ngramLookups++
 		blob, err := d.readSectionBlob(sec)
 		if err != nil {
 			return nil, err
 		}
 		if len(blob) > 0 {
-			iters = append(iters, newCompressedPostingIterator(blob, v))
+			if !fileName && d.isPEFPosting(idx) {
+				iters = append(iters, newPEFPostingIterator(blob, v))
+			} else {
+				iters = append(iters, newCompressedPostingIterator(blob, v))
+			}
 		}
 	}
 
 	if len(iters) == 1 {
 		// if we only return 1 then we need to include our ngramLookups stats
-		iter := (iters[0]).(*compressedPostingIterator)
-		iter.ngramLookups = ngramLookups
-		return iter, nil
+		if setter, ok := iters[0].(interface{ setNgramLookups(int) }); ok {
+			setter.setNgramLookups(ngramLookups)
+		}
+		return iters[0], nil
 	}
 	return &mergingIterator{
 		ngramLookups: ngramLookups,
@@ -228,6 +233,10 @@ func (i *compressedPostingIterator) next(limit uint32) {
 // the non-positive lengths binary.Uvarint returns for malformed input.
 func validatePostingVarint(blob []byte, sz int) {
 	_ = blob[sz-1]
+}
+
+func (i *compressedPostingIterator) setNgramLookups(n int) {
+	i.ngramLookups = n
 }
 
 func (i *compressedPostingIterator) updateStats(s *zoekt.Stats) {
