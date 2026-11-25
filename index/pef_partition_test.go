@@ -16,9 +16,52 @@ package index
 
 import (
 	"math"
+	"math/bits"
+	"math/rand/v2"
 	"reflect"
 	"testing"
 )
+
+func TestPEFEFBitsizePaperMatchesDivision(t *testing.T) {
+	check := func(lastRel, n uint64) {
+		t.Helper()
+		var want uint64
+		if n != 0 {
+			var lo int
+			if lastRel >= n {
+				lo = bits.Len64(lastRel/n) - 1
+			}
+			want = n + (lastRel >> lo) + 3 + n*uint64(lo)
+		}
+		if got := pefEFBitsizePaper(lastRel, n); got != want {
+			t.Fatalf("pefEFBitsizePaper(%d, %d) = %d, want %d", lastRel, n, got, want)
+		}
+	}
+
+	check(0, 0)
+	check(math.MaxUint64, 0)
+	for n := uint64(1); n <= 257; n++ {
+		for k := 0; k <= 64-bits.Len64(n); k++ {
+			edge := n << k
+			check(edge-1, n)
+			check(edge, n)
+			check(edge+1, n)
+		}
+	}
+	for _, n := range []uint64{1 << 31, math.MaxUint32, 1 << 63, math.MaxUint64} {
+		check(0, n)
+		check(n-1, n)
+		check(n, n)
+		check(math.MaxUint64, n)
+	}
+
+	rng := rand.New(rand.NewPCG(1, 2))
+	for range 10_000 {
+		lastRel := rng.Uint64()
+		check(lastRel, rng.Uint64())
+		check(lastRel, rng.Uint64()>>32)
+	}
+}
 
 func TestPEFSelectCodec(t *testing.T) {
 	cases := []struct {

@@ -42,12 +42,15 @@ func pefEFBitsizePaper(lastRel, n uint64) uint64 {
 	if n == 0 {
 		return 0
 	}
-	var lo uint64
+	var lo int
 	if lastRel >= n {
-		lo = uint64(bits.Len64(lastRel/n) - 1)
+		lo = bits.Len64(lastRel) - bits.Len64(n)
+		if lastRel < n<<lo {
+			lo--
+		}
 	}
 	higher := n + (lastRel >> lo) + 1 + 2
-	return higher + n*lo
+	return higher + n*uint64(lo)
 }
 
 // pefBitmapBitsizePaper returns the cost of a flat bitmap chunk:
