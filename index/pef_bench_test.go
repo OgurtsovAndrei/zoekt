@@ -108,18 +108,17 @@ func BenchmarkPEFEncode(b *testing.B) {
 	dists := []string{"uniform", "clustered_code", "all_ones", "sparse"}
 	sizes := []int{128, 1024, 16384, 262144}
 
-	runCase := func(b *testing.B, dist string, m int, cfg pefPartitionConfig) {
+	runCase := func(b *testing.B, dist string, m int, encode func([]uint32) []byte) {
 		keys := genSyntheticPostings(dist, m, int64(m)*31+17)
 		varintLen := len(toDeltas(keys))
-		enc := newPEFEncoder(cfg)
 		// Warm up reusable scratch buffers before timing.
-		blob := enc.encodePositions(keys)
+		blob := encode(keys)
 		pefLen := len(blob)
 
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			blob = enc.encodePositions(keys)
+			blob = encode(keys)
 			pefBenchSinkBytes = len(blob)
 		}
 		elapsed := b.Elapsed().Seconds()
@@ -135,8 +134,13 @@ func BenchmarkPEFEncode(b *testing.B) {
 	for _, dist := range dists {
 		for _, m := range sizes {
 			b.Run(fmt.Sprintf("default/dist=%s/m=%d", dist, m), func(b *testing.B) {
-				runCase(b, dist, m, defCfg)
+				runCase(b, dist, m, newPEFEncoder(defCfg).encodePositions)
 			})
+			for _, shift := range []uint8{7, 8} {
+				b.Run(fmt.Sprintf("Uniform%d/dist=%s/m=%d", 1<<shift, dist, m), func(b *testing.B) {
+					runCase(b, dist, m, newPEFUniformEncoder(shift).encodePositions)
+				})
+			}
 		}
 	}
 
@@ -149,10 +153,46 @@ func BenchmarkPEFEncode(b *testing.B) {
 				cfg.FixCost = fix
 				cfg.Eps1 = eps1
 				b.Run(fmt.Sprintf("sweep/dist=clustered_code/m=%d/fix=%d/eps1=%.2f", m, fix, eps1), func(b *testing.B) {
-					runCase(b, "clustered_code", m, cfg)
+					runCase(b, "clustered_code", m, newPEFEncoder(cfg).encodePositions)
 				})
 			}
 		}
+	}
+}
+
+func BenchmarkPEFUniformIterator(b *testing.B) {
+	const size = 262144
+	keys := genSyntheticPostings("clustered_code", size, int64(size)*31+17)
+	limits := genSortedLimits(100, keys[len(keys)-1], 17)
+	ng := stringToNGram("abc")
+	for _, shift := range []uint8{7, 8} {
+		enc := newPEFUniformEncoder(shift)
+		blob := enc.encodePositions(keys)
+		name := fmt.Sprintf("Uniform%d/m=%d", 1<<shift, size)
+		b.Run(name+"/seq", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				it := newPEFPostingIteratorWithBlockShift(blob, ng, shift)
+				var sum uint32
+				for cur := it.first(); cur != math.MaxUint32; cur = it.first() {
+					sum += cur
+					it.next(cur)
+				}
+				pefBenchSinkU32 = sum
+			}
+		})
+		b.Run(name+"/skip", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				it := newPEFPostingIteratorWithBlockShift(blob, ng, shift)
+				var sum uint32
+				for _, limit := range limits {
+					it.next(limit)
+					sum += it.first()
+				}
+				pefBenchSinkU32 = sum
+			}
+		})
 	}
 }
 

@@ -23,6 +23,71 @@ import (
 const pefSelect0SampleRate = 256
 
 const pefHeaderSize = 12
+const pefUniformHeaderSize = 8
+
+func validPEFUniformBlockShift(shift uint8) bool {
+	return shift == 7 || shift == 8
+}
+
+func pefUniformChunkCount(n uint32, shift uint8) uint32 {
+	return 1 + ((n - 1) >> shift)
+}
+
+type pefUniformEncoder struct {
+	posBuf     []uint32
+	outBuf     []byte
+	blockShift uint8
+}
+
+func newPEFUniformEncoder(blockShift uint8) *pefUniformEncoder {
+	if !validPEFUniformBlockShift(blockShift) {
+		panic("pefUniformEncoder: invalid block size")
+	}
+	return &pefUniformEncoder{blockShift: blockShift}
+}
+
+func (e *pefUniformEncoder) encodePositions(keys []uint32) []byte {
+	if len(keys) == 0 {
+		panic("pefUniformEncoder: empty keys")
+	}
+	blockSize := 1 << e.blockShift
+	numChunks := int(pefUniformChunkCount(uint32(len(keys)), e.blockShift))
+	dirLast := pefUniformHeaderSize
+	dirOff := dirLast + 4*numChunks
+	dirKind := dirOff + 4*numChunks
+	payloadStart := dirKind + (numChunks+3)/4
+	if cap(e.outBuf) < payloadStart {
+		e.outBuf = make([]byte, payloadStart)
+	} else {
+		e.outBuf = e.outBuf[:payloadStart]
+		clear(e.outBuf[dirKind:payloadStart])
+	}
+	binary.LittleEndian.PutUint32(e.outBuf[0:4], uint32(len(keys)))
+	binary.LittleEndian.PutUint32(e.outBuf[4:8], keys[0])
+
+	base := uint64(keys[0])
+	for c, start := 0, 0; start < len(keys); c, start = c+1, start+blockSize {
+		chunkKeys := keys[start:min(start+blockSize, len(keys))]
+		last := chunkKeys[len(chunkKeys)-1]
+		lastRel := uint32(uint64(last) - base)
+		kind := pefSelectCodec(lastRel, uint32(len(chunkKeys)))
+		binary.LittleEndian.PutUint32(e.outBuf[dirLast+4*c:], last)
+		binary.LittleEndian.PutUint32(e.outBuf[dirOff+4*c:], uint32(len(e.outBuf)-payloadStart))
+		e.outBuf[dirKind+c/4] |= byte(kind) << (2 * uint(c%4))
+		e.outBuf = appendPEFChunk(e.outBuf, chunkKeys, base, lastRel, kind)
+		base = uint64(last) + 1
+	}
+	return e.outBuf
+}
+
+func (e *pefUniformEncoder) encodeFromDeltas(deltaVarints []byte, minPostings int) (blob []byte, count int, ok bool) {
+	e.posBuf = decodePEFPostingDeltas(e.posBuf, deltaVarints)
+	count = len(e.posBuf)
+	if count == 0 || count < minPostings {
+		return nil, count, false
+	}
+	return e.encodePositions(e.posBuf), count, true
+}
 
 // pefEncoder encodes strictly increasing uint32 posting positions into a
 // self-contained, little-endian PISA PEF flat-blob. Instances are not safe for
@@ -82,16 +147,7 @@ func (e *pefEncoder) encodePositions(keys []uint32) []byte {
 		binary.LittleEndian.PutUint32(e.outBuf[dirNKind+4*c:], (count<<2)|uint32(kind))
 		binary.LittleEndian.PutUint32(e.outBuf[dirOff+4*c:], off)
 
-		switch kind {
-		case pefKindAllOnes:
-			// 0-byte payload: keys are contiguous [base, base+count-1].
-		case pefKindBitmap:
-			e.outBuf = appendPEFChunkBitmap(e.outBuf, chunkKeys, base, lastRel)
-		case pefKindEF:
-			e.outBuf = appendPEFChunkEF(e.outBuf, chunkKeys, base, lastRel)
-		default:
-			panic(fmt.Sprintf("pefEncoder: unexpected chunk kind %d", kind))
-		}
+		e.outBuf = appendPEFChunk(e.outBuf, chunkKeys, base, lastRel, kind)
 
 		start = end
 		base = uint64(last) + 1
@@ -105,7 +161,16 @@ func (e *pefEncoder) encodePositions(keys []uint32) []byte {
 // Otherwise it encodes them with encodePositions and returns (blob, count, true),
 // where blob is valid until the next encoder call.
 func (e *pefEncoder) encodeFromDeltas(deltaVarints []byte, minPostings int) (blob []byte, count int, ok bool) {
-	e.posBuf = e.posBuf[:0]
+	e.posBuf = decodePEFPostingDeltas(e.posBuf, deltaVarints)
+	count = len(e.posBuf)
+	if count == 0 || count < minPostings {
+		return nil, count, false
+	}
+	return e.encodePositions(e.posBuf), count, true
+}
+
+func decodePEFPostingDeltas(dst []uint32, deltaVarints []byte) []uint32 {
+	dst = dst[:0]
 	var cur uint32
 	i := 0
 	n := len(deltaVarints)
@@ -113,7 +178,7 @@ func (e *pefEncoder) encodeFromDeltas(deltaVarints []byte, minPostings int) (blo
 		b := deltaVarints[i]
 		if b < 0x80 {
 			cur += uint32(b)
-			e.posBuf = append(e.posBuf, cur)
+			dst = append(dst, cur)
 			i++
 			continue
 		}
@@ -122,15 +187,23 @@ func (e *pefEncoder) encodeFromDeltas(deltaVarints []byte, minPostings int) (blo
 			panic(fmt.Sprintf("pefEncoder: malformed varint at offset %d (sz=%d)", i, sz))
 		}
 		cur += uint32(d)
-		e.posBuf = append(e.posBuf, cur)
+		dst = append(dst, cur)
 		i += sz
 	}
+	return dst
+}
 
-	count = len(e.posBuf)
-	if count == 0 || count < minPostings {
-		return nil, count, false
+func appendPEFChunk(out []byte, keys []uint32, base uint64, lastRel uint32, kind pefChunkKind) []byte {
+	switch kind {
+	case pefKindAllOnes:
+		return out
+	case pefKindBitmap:
+		return appendPEFChunkBitmap(out, keys, base, lastRel)
+	case pefKindEF:
+		return appendPEFChunkEF(out, keys, base, lastRel)
+	default:
+		panic(fmt.Sprintf("pefEncoder: unexpected chunk kind %d", kind))
 	}
-	return e.encodePositions(e.posBuf), count, true
 }
 
 func growZeroed(buf []byte, n int) ([]byte, []byte) {

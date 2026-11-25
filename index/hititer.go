@@ -130,7 +130,11 @@ func (d *indexData) trigramHitIterator(ng ngram, caseSensitive, fileName bool) (
 		}
 		if len(blob) > 0 {
 			if !fileName && d.isPEFPosting(idx) {
-				iters = append(iters, newPEFPostingIterator(blob, v))
+				if d.pefUniformBlockShift == 0 {
+					iters = append(iters, newPEFPostingIterator(blob, v))
+				} else {
+					iters = append(iters, newPEFPostingIteratorWithBlockShift(blob, v, d.pefUniformBlockShift))
+				}
 			} else {
 				iters = append(iters, newCompressedPostingIterator(blob, v))
 			}

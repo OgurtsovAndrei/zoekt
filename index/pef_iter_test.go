@@ -390,6 +390,68 @@ func TestPEFPostingIteratorSequentialAndSkip(t *testing.T) {
 	})
 }
 
+func TestPEFUniformRoundTrip(t *testing.T) {
+	ng := stringToNGram("abc")
+	for _, shift := range []uint8{7, 8} {
+		size := 1 << shift
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			enc := newPEFUniformEncoder(shift)
+			for _, n := range []int{1, size - 1, size, size + 1, 5*size + 3, size + 1, 1} {
+				keys := make([]uint32, n)
+				pos := uint32(100)
+				for i := range keys {
+					switch (i / size) % 3 {
+					case 0:
+						pos++
+					case 1:
+						pos += 1 + uint32(i%2)
+					case 2:
+						pos += 501 + uint32(i%17)
+					}
+					keys[i] = pos
+				}
+				blob, count, ok := enc.encodeFromDeltas(toDeltas(keys), n)
+				if !ok || count != n {
+					t.Fatalf("n=%d: got count=%d, encoded=%v", n, count, ok)
+				}
+				it := newPEFPostingIteratorWithBlockShift(blob, ng, shift)
+				chunks := (n + size - 1) / size
+				if it.numChunks != chunks || it.payloadStart != uint64(8+8*chunks+(chunks+3)/4) {
+					t.Fatalf("n=%d: chunks=%d, payload start=%d", n, it.numChunks, it.payloadStart)
+				}
+				if n > 5*size {
+					for c, want := range []pefChunkKind{pefKindAllOnes, pefKindBitmap, pefKindEF, pefKindAllOnes, pefKindBitmap, pefKindEF} {
+						count, kind := it.readChunkCountKind(c)
+						if kind != want || count != uint32(min(size, n-c*size)) {
+							t.Fatalf("n=%d chunk=%d: invalid kind=%d or count=%d", n, c, kind, count)
+						}
+					}
+				}
+				for _, want := range keys {
+					if got := it.first(); got != want {
+						t.Fatalf("n=%d: got %d, want %d", n, got, want)
+					}
+					it.next(want)
+				}
+				if got := it.first(); got != math.MaxUint32 {
+					t.Fatalf("n=%d: got %d at exhaustion", n, got)
+				}
+
+				limits := genSortedLimits(100, keys[len(keys)-1], int64(n))
+				for c := size; c < n; c += size {
+					limits = append(limits, keys[c-1]-1, keys[c-1], keys[c]-1, keys[c])
+				}
+				slices.Sort(limits)
+				want := doHitIterator(&inMemoryIterator{postings: keys}, limits)
+				got := doHitIterator(newPEFPostingIteratorWithBlockShift(blob, ng, shift), limits)
+				if !slices.Equal(got, want) {
+					t.Fatalf("n=%d: skip mismatch (-want +got):\n%s", n, cmp.Diff(want, got))
+				}
+			}
+		})
+	}
+}
+
 func TestPEFPostingIteratorQuick(t *testing.T) {
 	cfg := defaultPEFPartitionConfig()
 	ng := stringToNGram("abc")
@@ -567,6 +629,18 @@ func TestPEFPostingIteratorMalformed(t *testing.T) {
 			it.next(it.first())
 		}
 	}
+
+	t.Run("UniformInvalidPackedKind", func(t *testing.T) {
+		const shift = 7
+		keys := make([]uint32, (1<<shift)+1)
+		for k := range keys {
+			keys[k] = uint32(k)
+		}
+		blob := newPEFUniformEncoder(shift).encodePositions(keys)
+		it := newPEFPostingIteratorWithBlockShift(blob, ng, shift)
+		blob[it.dirNKindOff] |= 3 << 2
+		assertCorruptPanic(t, func() { it.next((1 << shift) - 1) })
+	})
 
 	// Build a valid 2-chunk blob (chunk 0: Bitmap, chunk 1: EF with select0Samples) for mutation cases.
 	var multiKeys []uint32

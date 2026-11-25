@@ -44,7 +44,14 @@ const IndexFormatVersion = 16
 // 11: Bloom filters for file names & contents
 // 12: go-enry for identifying file languages
 // 13: PISA PEF posting lists (postingsPEFBitmap)
-const FeatureVersion = 13
+// 14: Fixed-block PEF posting lists (postingsPEFUniform)
+const FeatureVersion = pefUniformFeatureVersion
+
+const (
+	pefOptFeatureVersion     = 13
+	pefUniformFeatureVersion = 14
+	pefUniformTOCTag         = "postingsPEFUniform"
+)
 
 // WriteMinFeatureVersion and ReadMinFeatureVersion constrain forwards and backwards
 // compatibility. For example, if a new way to encode filenameNgrams on disk is
@@ -70,17 +77,18 @@ const ReadMinFeatureVersion = 8
 const NextIndexFormatVersion = 17
 
 type indexTOC struct {
-	fileContents      compoundSection
-	fileNames         compoundSection
-	fileSections      compoundSection
-	postings          compoundSection
-	postingsPEFBitmap simpleSection
-	newlines          compoundSection
-	ngramText         simpleSection
-	runeOffsets       simpleSection
-	fileEndRunes      simpleSection
-	languages         simpleSection
-	categories        simpleSection
+	fileContents       compoundSection
+	fileNames          compoundSection
+	fileSections       compoundSection
+	postings           compoundSection
+	postingsPEFBitmap  simpleSection
+	postingsPEFUniform simpleSection
+	newlines           compoundSection
+	ngramText          simpleSection
+	runeOffsets        simpleSection
+	fileEndRunes       simpleSection
+	languages          simpleSection
+	categories         simpleSection
 
 	fileEndSymbol  simpleSection
 	symbolMap      lazyCompoundSection
@@ -152,13 +160,14 @@ func (t *indexTOC) sectionsTagged() map[string]section {
 	for _, ent := range t.sectionsTaggedCompatibilityList() {
 		out[ent.tag] = ent.sec
 	}
+	out[pefUniformTOCTag] = &t.postingsPEFUniform
 	return out
 }
 
 func (t *indexTOC) sectionsTaggedList() []taggedSection {
 	var unusedSimple simpleSection
 
-	return []taggedSection{
+	sections := []taggedSection{
 		{"metaData", &t.metaData},
 		{"repoMetaData", &t.repoMetaData},
 		{"fileContents", &t.fileContents},
@@ -193,6 +202,10 @@ func (t *indexTOC) sectionsTaggedList() []taggedSection {
 		{"contentBloom", &unusedSimple},
 		{"ranks", &unusedSimple},
 	}
+	if t.postingsPEFUniform.sz != 0 {
+		sections = append(sections, taggedSection{pefUniformTOCTag, &t.postingsPEFUniform})
+	}
+	return sections
 }
 
 // sectionsTaggedCompatibilityList returns a list of sections that will be

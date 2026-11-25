@@ -37,8 +37,9 @@ type indexData struct {
 
 	file IndexFile
 
-	contentNgrams     ngramIndex
-	postingsPEFBitmap []byte
+	contentNgrams        ngramIndex
+	postingsPEFBitmap    []byte
+	pefUniformBlockShift uint8
 
 	newlinesStart uint32
 	newlinesIndex []uint32

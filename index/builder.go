@@ -155,6 +155,24 @@ func resolvePEFMinPostings(configured int) int {
 	return v
 }
 
+func resolvePEFUniformBlockShift(pefMinPostings int) uint8 {
+	if pefMinPostings <= 0 {
+		return 0
+	}
+	raw := strings.TrimSpace(os.Getenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE"))
+	switch raw {
+	case "":
+		return 0
+	case "128":
+		return 7
+	case "256":
+		return 8
+	default:
+		slog.Warn("invalid ZOEKT_PEF_UNIFORM_BLOCK_SIZE, using PEF-Opt", "value", raw)
+		return 0
+	}
+}
+
 func resolvePEFPartitionConfig() pefPartitionConfig {
 	cfg := defaultPEFPartitionConfig()
 	if raw := strings.TrimSpace(os.Getenv("ZOEKT_PEF_FIX_COST")); raw != "" {
@@ -472,7 +490,8 @@ func (o *Options) IndexState() (IndexState, string) {
 	}
 
 	for _, v := range readVersions {
-		if v.IndexFormatVersion == index.IndexFormatVersion && v.FeatureVersion != index.IndexFeatureVersion {
+		if v.IndexFormatVersion == index.IndexFormatVersion && v.FeatureVersion != index.IndexFeatureVersion &&
+			index.IndexFeatureVersion != pefOptFeatureVersion {
 			return IndexStateVersion, fn
 		}
 	}
@@ -1211,13 +1230,12 @@ func (b *Builder) newShardBuilder() (*ShardBuilder, error) {
 
 	content := b.getPostingsBuilder()
 	name := b.getPostingsBuilder()
-	shardBuilder := newShardBuilderWithPostings(content, name)
+	shardBuilder := newShardBuilderWithPostings(content, name, resolvePEFMinPostings(b.opts.PEFMinPostings))
 	if err := shardBuilder.setRepository(&desc); err != nil {
 		return nil, err
 	}
 	shardBuilder.IndexTime = b.indexTime
 	shardBuilder.ID = b.id
-	shardBuilder.pefMinPostings = resolvePEFMinPostings(b.opts.PEFMinPostings)
 	return shardBuilder, nil
 }
 

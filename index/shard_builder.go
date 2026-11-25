@@ -319,7 +319,8 @@ type ShardBuilder struct {
 	// a sortable 20 chars long id.
 	ID string
 
-	pefMinPostings int
+	pefMinPostings       int
+	pefUniformBlockShift uint8
 }
 
 func verify(repo *zoekt.Repository) error {
@@ -399,21 +400,23 @@ func newShardBuilder(shardMax int) *ShardBuilder {
 	return newShardBuilderWithPostings(
 		newPostingsBuilder(shardMax),
 		newPostingsBuilder(shardMax),
+		resolvePEFMinPostings(0),
 	)
 }
 
-func newShardBuilderWithPostings(content, name *postingsBuilder) *ShardBuilder {
+func newShardBuilderWithPostings(content, name *postingsBuilder, pefMinPostings int) *ShardBuilder {
 	return &ShardBuilder{
 		indexFormatVersion: IndexFormatVersion,
-		featureVersion:     FeatureVersion,
+		featureVersion:     pefOptFeatureVersion,
 
-		contentPostings: content,
-		namePostings:    name,
-		fileEndSymbol:   []uint32{0},
-		symIndex:        make(map[string]uint32),
-		symKindIndex:    make(map[string]uint32),
-		languageMap:     make(map[string]uint16),
-		pefMinPostings:  resolvePEFMinPostings(0),
+		contentPostings:      content,
+		namePostings:         name,
+		fileEndSymbol:        []uint32{0},
+		symIndex:             make(map[string]uint32),
+		symKindIndex:         make(map[string]uint32),
+		languageMap:          make(map[string]uint16),
+		pefMinPostings:       pefMinPostings,
+		pefUniformBlockShift: resolvePEFUniformBlockShift(pefMinPostings),
 	}
 }
 

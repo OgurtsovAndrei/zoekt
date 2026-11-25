@@ -331,7 +331,7 @@ func (r *reader) readIndexData(toc *indexTOC) (*indexData, error) {
 		return nil, err
 	}
 
-	d.postingsPEFBitmap, err = d.readSectionBlob(toc.postingsPEFBitmap)
+	d.postingsPEFBitmap, d.pefUniformBlockShift, err = r.readPEFMetadata(toc, md)
 	if err != nil {
 		return nil, err
 	}
@@ -440,6 +440,34 @@ func (r *reader) readIndexData(toc *indexTOC) (*indexData, error) {
 	}
 
 	return &d, nil
+}
+
+func (r *reader) readPEFMetadata(toc *indexTOC, md *zoekt.IndexMetadata) ([]byte, uint8, error) {
+	if toc.postingsPEFUniform.sz == 0 {
+		if md.IndexFeatureVersion == pefUniformFeatureVersion && md.IndexMinReaderVersion == pefUniformFeatureVersion {
+			return nil, 0, fmt.Errorf("shard is missing PEF-Uniform metadata")
+		}
+		bitmap, err := r.r.Read(toc.postingsPEFBitmap.off, toc.postingsPEFBitmap.sz)
+		return bitmap, 0, err
+	}
+	if toc.postingsPEFBitmap.sz != 0 {
+		return nil, 0, fmt.Errorf("shard has both PEF-Opt and PEF-Uniform metadata")
+	}
+	if md.IndexMinReaderVersion < pefUniformFeatureVersion || md.IndexFeatureVersion < pefUniformFeatureVersion {
+		return nil, 0, fmt.Errorf("invalid feature version for PEF-Uniform metadata")
+	}
+	ngramCount := toc.ngramText.sz / 8
+	if ngramCount == 0 || toc.postingsPEFUniform.sz != 1+(ngramCount+7)/8 {
+		return nil, 0, fmt.Errorf("invalid PEF-Uniform bitmap size")
+	}
+	blob, err := r.r.Read(toc.postingsPEFUniform.off, toc.postingsPEFUniform.sz)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(blob) < 2 || !validPEFUniformBlockShift(blob[0]) {
+		return nil, 0, fmt.Errorf("invalid block size in PEF-Uniform metadata")
+	}
+	return blob[1:], blob[0], nil
 }
 
 // ErrEmptyShard is returned when reading the metadata of a shard that contains

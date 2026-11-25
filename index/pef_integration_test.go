@@ -123,6 +123,20 @@ func openTestSearcher(t *testing.T, shardPath string) (zoekt.Searcher, *indexTOC
 }
 
 func TestPEFShardSearchParity(t *testing.T) {
+	for _, blockSize := range []string{"", "128", "256"} {
+		name := "Opt"
+		if blockSize != "" {
+			name = "Uniform" + blockSize
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE", blockSize)
+			testPEFShardSearchParity(t, blockSize != "")
+		})
+	}
+}
+
+func testPEFShardSearchParity(t *testing.T, uniform bool) {
+	t.Helper()
 	docs := buildTestCorpusDocs()
 	fixedTime := time.Unix(1700000000, 0).UTC()
 
@@ -135,13 +149,19 @@ func TestPEFShardSearchParity(t *testing.T) {
 	if varintTOC.postingsPEFBitmap.sz != 0 {
 		t.Fatalf("varint shard postingsPEFBitmap.sz = %d, want 0", varintTOC.postingsPEFBitmap.sz)
 	}
-	if pefTOC.postingsPEFBitmap.sz == 0 {
-		t.Fatalf("PEF shard postingsPEFBitmap.sz = 0, want > 0")
-	}
-
 	pefData := pefSearcher.(*indexData)
-	if pefData.metaData.IndexMinReaderVersion != FeatureVersion {
-		t.Fatalf("PEF shard IndexMinReaderVersion = %d, want %d", pefData.metaData.IndexMinReaderVersion, FeatureVersion)
+	wantVersion := 13
+	if uniform {
+		wantVersion = 14
+	}
+	if pefData.metaData.IndexMinReaderVersion != wantVersion || pefData.metaData.IndexFeatureVersion != wantVersion {
+		t.Fatalf("PEF shard reader/feature versions = %d/%d, want %d", pefData.metaData.IndexMinReaderVersion, pefData.metaData.IndexFeatureVersion, wantVersion)
+	}
+	if (pefTOC.postingsPEFBitmap.sz == 0) != uniform {
+		t.Fatalf("legacy PEF bitmap size = %d with uniform=%v", pefTOC.postingsPEFBitmap.sz, uniform)
+	}
+	if varintSearcher.(*indexData).metaData.IndexMinReaderVersion != WriteMinFeatureVersion {
+		t.Fatal("disabled PEF changed the minimum reader version")
 	}
 	// Verify namePostings stay varint and content has both PEF and varint trigrams.
 	_, peIdx := pefData.contentNgrams.GetWithIndex(stringToNGram("pha"))
@@ -237,6 +257,7 @@ func TestPEFShardSearchParity(t *testing.T) {
 
 func TestPEFSmallRepoZeroOverhead(t *testing.T) {
 	t.Setenv("ZOEKT_PEF_MIN_POSTINGS", "")
+	t.Setenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE", "128")
 	docs := []Document{
 		{Name: "a.go", Content: []byte("package main\nfunc main() { println(\"hello world\") }\n")},
 		{Name: "b.go", Content: []byte("package main\nfunc helper() int { return 42 }\n")},
@@ -265,7 +286,77 @@ func TestPEFSmallRepoZeroOverhead(t *testing.T) {
 	}
 }
 
+func TestPEFUniformShardMetadata(t *testing.T) {
+	docs := buildTestCorpusDocs()
+	fixedTime := time.Unix(1700000000, 0).UTC()
+	const id = "uniform0000000000001"
+
+	t.Setenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE", "")
+	opt, _ := buildTestShardBytes(t, "uniform", docs, 128, fixedTime, id)
+	t.Setenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE", "not-a-size")
+	fallback, _ := buildTestShardBytes(t, "uniform", docs, 128, fixedTime, id)
+	if !bytes.Equal(opt, fallback) {
+		t.Fatal("invalid block size changed the default format")
+	}
+	t.Setenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE", "128")
+	raw, path := buildTestShardBytes(t, "uniform", docs, 128, fixedTime, id)
+	t.Setenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE", "")
+	s, toc := openTestSearcher(t, path)
+	if toc.postingsPEFUniform.sz == 0 || s.(*indexData).pefUniformBlockShift != 7 {
+		t.Fatal("reader did not use the shard's Uniform metadata")
+	}
+	for _, tc := range []struct {
+		name string
+		edit func([]byte)
+	}{
+		{"unsupported_block_size", func(blob []byte) { blob[toc.postingsPEFUniform.off] = 6 }},
+		{"legacy_reader_version", func(blob []byte) {
+			metadata := blob[toc.metaData.off : toc.metaData.off+toc.metaData.sz]
+			copy(metadata, bytes.Replace(metadata, []byte(`"IndexMinReaderVersion":14`), []byte(`"IndexMinReaderVersion":13`), 1))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bad := bytes.Clone(raw)
+			tc.edit(bad)
+			if _, err := NewSearcher(&memSeeker{bad}); err == nil || !strings.Contains(err.Error(), "Uniform") {
+				t.Fatalf("expected Uniform metadata error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestPEFUniformIndexStateAcceptsExistingShards(t *testing.T) {
+	docs := buildTestCorpusDocs()
+	for _, tc := range []struct {
+		name, writtenWith, checkedWith string
+	}{
+		{"keep_opt", "", "128"},
+		{"keep_uniform", "128", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE", tc.writtenWith)
+			_, path := buildTestShardBytes(t, "uniform", docs, 128, time.Unix(1700000000, 0), "uniform0000000000001")
+			t.Setenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE", tc.checkedWith)
+			opts := Options{
+				IndexDir:       filepath.Dir(path),
+				DisableCTags:   true,
+				Parallelism:    1,
+				PEFMinPostings: 128,
+				RepositoryDescription: zoekt.Repository{
+					Name:     "uniform",
+					Branches: []zoekt.RepositoryBranch{{Name: "main", Version: "v1"}},
+				},
+			}
+			opts.SetDefaults()
+			if state, _ := opts.IndexState(); state != IndexStateEqual {
+				t.Fatalf("IndexState = %v, want %v", state, IndexStateEqual)
+			}
+		})
+	}
+}
+
 func TestPEFMergeWithLegacyShard(t *testing.T) {
+	t.Setenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE", "")
 	fixedTime := time.Unix(1700000000, 0).UTC()
 	docs1 := buildTestCorpusDocs()
 	docs2 := []Document{
@@ -294,6 +385,7 @@ func TestPEFMergeWithLegacyShard(t *testing.T) {
 	}
 
 	t.Setenv("ZOEKT_PEF_MIN_POSTINGS", "128")
+	t.Setenv("ZOEKT_PEF_UNIFORM_BLOCK_SIZE", "256")
 	mergeDir := t.TempDir()
 	tmpName, dstName, err := Merge(mergeDir, openInf(pefShardPath), openInf(legacyShardPath))
 	if err != nil {
@@ -304,8 +396,8 @@ func TestPEFMergeWithLegacyShard(t *testing.T) {
 	}
 
 	mergedSearcher, mergedTOC := openTestSearcher(t, dstName)
-	if mergedTOC.postingsPEFBitmap.sz == 0 {
-		t.Fatalf("merged shard postingsPEFBitmap.sz = 0, want > 0 with ZOEKT_PEF_MIN_POSTINGS=128")
+	if mergedTOC.postingsPEFBitmap.sz != 0 || mergedSearcher.(*indexData).metaData.IndexMinReaderVersion != 14 {
+		t.Fatal("merged shard was not written in the Uniform format")
 	}
 
 	pefSearcher, _ := openTestSearcher(t, pefShardPath)
@@ -346,14 +438,28 @@ func TestPEFMergeWithLegacyShard(t *testing.T) {
 	if len(exploded) != 2 {
 		t.Fatalf("exploded %d shards, want 2", len(exploded))
 	}
+	var explodedMatches int
+	explodeQuery := &query.Substring{Pattern: "commonTokenAlpha", Content: true, CaseSensitive: true}
 	for tmp, final := range exploded {
 		if err := os.Rename(tmp, final); err != nil {
 			t.Fatalf("Rename(%s): %v", final, err)
 		}
-		_, expTOC := openTestSearcher(t, final)
-		if expTOC.postingsPEFBitmap.sz != 0 {
-			t.Fatalf("exploded shard %s has postingsPEFBitmap.sz=%d with ZOEKT_PEF_MIN_POSTINGS=0, want 0", filepath.Base(final), expTOC.postingsPEFBitmap.sz)
+		expSearcher, expTOC := openTestSearcher(t, final)
+		if expTOC.postingsPEFBitmap.sz != 0 || expSearcher.(*indexData).metaData.IndexMinReaderVersion != WriteMinFeatureVersion {
+			t.Fatalf("exploded shard %s used PEF with ZOEKT_PEF_MIN_POSTINGS=0", filepath.Base(final))
 		}
+		res, err := expSearcher.Search(ctx, explodeQuery, &zoekt.SearchOptions{})
+		if err != nil {
+			t.Fatalf("exploded search: %v", err)
+		}
+		explodedMatches += len(res.Files)
+	}
+	mergedRes, err := mergedSearcher.Search(ctx, explodeQuery, &zoekt.SearchOptions{})
+	if err != nil {
+		t.Fatalf("merged search: %v", err)
+	}
+	if explodedMatches != len(mergedRes.Files) {
+		t.Fatalf("exploded matches=%d, want %d", explodedMatches, len(mergedRes.Files))
 	}
 }
 

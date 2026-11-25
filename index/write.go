@@ -81,12 +81,12 @@ func writeUint32Bitmap(w *writer, dat []uint32) {
 func writePostings(w *writer, s *postingsBuilder, ngramText *simpleSection,
 	charOffsets *simpleSection, postings *compoundSection, endRunes *simpleSection,
 ) {
-	writePostingsWithPEF(w, s, ngramText, charOffsets, postings, endRunes, nil, -1)
+	writePostingsWithPEF(w, s, ngramText, charOffsets, postings, endRunes, nil, -1, 0)
 }
 
 func writePostingsWithPEF(w *writer, s *postingsBuilder, ngramText *simpleSection,
 	charOffsets *simpleSection, postings *compoundSection, endRunes *simpleSection,
-	pefBitmap *simpleSection, pefMinPostings int,
+	pefBitmap *simpleSection, pefMinPostings int, pefUniformBlockShift uint8,
 ) {
 	// Collect ngrams from both the ASCII direct-indexed array and the
 	// non-ASCII map, then sort by ngram value.
@@ -116,7 +116,9 @@ func writePostingsWithPEF(w *writer, s *postingsBuilder, ngramText *simpleSectio
 	}
 	ngramText.end(w)
 
-	var enc *pefEncoder
+	var enc interface {
+		encodeFromDeltas(deltaVarints []byte, minPostings int) ([]byte, int, bool)
+	}
 	var bitmap []byte
 	allowPEF := pefBitmap != nil && pefMinPostings > 0
 
@@ -126,7 +128,11 @@ func writePostingsWithPEF(w *writer, s *postingsBuilder, ngramText *simpleSectio
 		// guarantees posting count < pefMinPostings without decoding varints.
 		if allowPEF && len(np.pl.data) >= pefMinPostings {
 			if enc == nil {
-				enc = newPEFEncoder(resolvePEFPartitionConfig())
+				if pefUniformBlockShift != 0 {
+					enc = newPEFUniformEncoder(pefUniformBlockShift)
+				} else {
+					enc = newPEFEncoder(resolvePEFPartitionConfig())
+				}
 			}
 			if blob, _, ok := enc.encodeFromDeltas(np.pl.data, pefMinPostings); ok {
 				postings.addItem(w, blob)
@@ -151,6 +157,11 @@ func writePostingsWithPEF(w *writer, s *postingsBuilder, ngramText *simpleSectio
 
 	if pefBitmap != nil && len(bitmap) > 0 {
 		pefBitmap.start(w)
+		if pefUniformBlockShift != 0 {
+			if _, err := w.Write([]byte{pefUniformBlockShift}); err != nil {
+				return
+			}
+		}
 		w.Write(bitmap)
 		pefBitmap.end(w)
 	}
@@ -198,7 +209,11 @@ func (b *ShardBuilder) Write(out io.Writer) error {
 	}
 	toc.fileSections.end(w)
 
-	writePostingsWithPEF(w, b.contentPostings, &toc.ngramText, &toc.runeOffsets, &toc.postings, &toc.fileEndRunes, &toc.postingsPEFBitmap, b.pefMinPostings)
+	pefBitmap := &toc.postingsPEFBitmap
+	if b.pefUniformBlockShift != 0 {
+		pefBitmap = &toc.postingsPEFUniform
+	}
+	writePostingsWithPEF(w, b.contentPostings, &toc.ngramText, &toc.runeOffsets, &toc.postings, &toc.fileEndRunes, pefBitmap, b.pefMinPostings, b.pefUniformBlockShift)
 
 	// names.
 	toc.fileNames.writeStrings(w, b.nameStrings)
@@ -243,14 +258,18 @@ func (b *ShardBuilder) Write(out io.Writer) error {
 	}
 
 	minReaderVersion := WriteMinFeatureVersion
-	if toc.postingsPEFBitmap.sz > 0 {
-		minReaderVersion = FeatureVersion
+	featureVersion := b.featureVersion
+	if toc.postingsPEFUniform.sz > 0 {
+		minReaderVersion = pefUniformFeatureVersion
+		featureVersion = max(featureVersion, pefUniformFeatureVersion)
+	} else if toc.postingsPEFBitmap.sz > 0 {
+		minReaderVersion = pefOptFeatureVersion
 	}
 
 	if err := b.writeJSON(&zoekt.IndexMetadata{
 		IndexFormatVersion:    b.indexFormatVersion,
 		IndexTime:             indexTime,
-		IndexFeatureVersion:   b.featureVersion,
+		IndexFeatureVersion:   featureVersion,
 		IndexMinReaderVersion: minReaderVersion,
 		PlainASCII:            b.contentPostings.isPlainASCII && b.namePostings.isPlainASCII,
 		LanguageMap:           b.languageMap,

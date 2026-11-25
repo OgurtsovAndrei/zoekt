@@ -33,8 +33,10 @@ type pefPostingIterator struct {
 	numChunks    int
 	firstKey     uint32
 	payloadStart uint64
-	dirNKindOff  uint64
-	dirOffOff    uint64
+	dirLastOff   int
+	dirNKindOff  int
+	dirOffOff    int
+	blockShift   uint8
 
 	curVal      uint32
 	chunkIdx    int
@@ -63,14 +65,30 @@ type pefPostingIterator struct {
 }
 
 func newPEFPostingIterator(blob []byte, w ngram) *pefPostingIterator {
-	if len(blob) < pefHeaderSize {
+	return newPEFPostingIteratorWithBlockShift(blob, w, 0)
+}
+
+func newPEFPostingIteratorWithBlockShift(blob []byte, w ngram, blockShift uint8) *pefPostingIterator {
+	headerSize := pefHeaderSize
+	if blockShift != 0 {
+		if !validPEFUniformBlockShift(blockShift) {
+			panic("corrupt pef posting: invalid Uniform block size")
+		}
+		headerSize = pefUniformHeaderSize
+	}
+	if len(blob) < headerSize {
 		panic("corrupt pef posting: truncated header")
 	}
 	n := binary.LittleEndian.Uint32(blob[0:4])
-	numChunks := binary.LittleEndian.Uint32(blob[4:8])
-	firstKey := binary.LittleEndian.Uint32(blob[8:12])
 	if n == 0 {
 		panic("corrupt pef posting: zero postings")
+	}
+	firstKey := binary.LittleEndian.Uint32(blob[headerSize-4:])
+	var numChunks uint32
+	if blockShift == 0 {
+		numChunks = binary.LittleEndian.Uint32(blob[4:8])
+	} else {
+		numChunks = pefUniformChunkCount(n, blockShift)
 	}
 	if numChunks == 0 {
 		panic("corrupt pef posting: zero chunks")
@@ -78,7 +96,13 @@ func newPEFPostingIterator(blob []byte, w ngram) *pefPostingIterator {
 	if numChunks > n {
 		panic("corrupt pef posting: numChunks exceeds n")
 	}
-	payloadStart := uint64(pefHeaderSize) + 12*uint64(numChunks)
+	dirNKindOff := uint64(headerSize) + 4*uint64(numChunks)
+	dirOffOff := dirNKindOff + 4*uint64(numChunks)
+	payloadStart := dirOffOff + 4*uint64(numChunks)
+	if blockShift != 0 {
+		dirNKindOff, dirOffOff = dirOffOff, dirNKindOff
+		payloadStart = dirNKindOff + (uint64(numChunks)+3)/4
+	}
 	if payloadStart > uint64(len(blob)) {
 		panic("corrupt pef posting: truncated directory")
 	}
@@ -90,22 +114,22 @@ func newPEFPostingIterator(blob []byte, w ngram) *pefPostingIterator {
 		numChunks:        c,
 		firstKey:         firstKey,
 		payloadStart:     payloadStart,
-		dirNKindOff:      uint64(pefHeaderSize) + 4*uint64(c),
-		dirOffOff:        uint64(pefHeaderSize) + 8*uint64(c),
+		dirLastOff:       headerSize,
+		dirNKindOff:      int(dirNKindOff),
+		dirOffOff:        int(dirOffOff),
+		blockShift:       blockShift,
 		curVal:           firstKey,
-		indexBytesLoaded: pefHeaderSize,
+		indexBytesLoaded: headerSize,
 		what:             w,
 	}
 
 	// Validate chunk 0 directory entry on construction while keeping chunk 0
 	// payload unloaded until actually entered.
 	last0 := it.readChunkLastRaw(0)
-	nKind0 := it.readChunkNKindRaw(0)
+	count0, kind0 := it.readChunkCountKind(0)
 	off0 := it.readChunkOffRaw(0)
-	it.indexBytesLoaded += 12
+	it.indexBytesLoaded += 8 + it.chunkCountKindBytes()
 
-	count0 := nKind0 >> 2
-	kind0 := pefChunkKind(nKind0 & 3)
 	if kind0 > pefKindBitmap || count0 == 0 || count0 > n || last0 < firstKey || off0 != 0 {
 		panic("corrupt pef posting: invalid chunk 0 directory entry")
 	}
@@ -179,7 +203,7 @@ func (i *pefPostingIterator) exhaust() {
 }
 
 func (i *pefPostingIterator) readChunkLastRaw(c int) uint32 {
-	off := pefHeaderSize + 4*c
+	off := i.dirLastOff + 4*c
 	return binary.LittleEndian.Uint32(i.blob[off : off+4])
 }
 
@@ -188,13 +212,26 @@ func (i *pefPostingIterator) readChunkLast(c int) uint32 {
 	return i.readChunkLastRaw(c)
 }
 
-func (i *pefPostingIterator) readChunkNKindRaw(c int) uint32 {
-	off := int(i.dirNKindOff) + 4*c
-	return binary.LittleEndian.Uint32(i.blob[off : off+4])
+func (i *pefPostingIterator) readChunkCountKind(c int) (uint32, pefChunkKind) {
+	if i.blockShift != 0 {
+		count := min(uint32(1)<<i.blockShift, i.n-(uint32(c)<<i.blockShift))
+		kind := i.blob[i.dirNKindOff+c/4] >> (2 * uint(c%4))
+		return count, pefChunkKind(kind & 3)
+	}
+	off := i.dirNKindOff + 4*c
+	nKind := binary.LittleEndian.Uint32(i.blob[off : off+4])
+	return nKind >> 2, pefChunkKind(nKind & 3)
+}
+
+func (i *pefPostingIterator) chunkCountKindBytes() int {
+	if i.blockShift != 0 {
+		return 1
+	}
+	return 4
 }
 
 func (i *pefPostingIterator) readChunkOffRaw(c int) uint32 {
-	off := int(i.dirOffOff) + 4*c
+	off := i.dirOffOff + 4*c
 	return binary.LittleEndian.Uint32(i.blob[off : off+4])
 }
 
@@ -289,15 +326,13 @@ func (i *pefPostingIterator) advanceToChunk(target uint32) bool {
 
 func (i *pefPostingIterator) loadChunk(c int) {
 	if c != 0 {
-		i.indexBytesLoaded += 8
+		i.indexBytesLoaded += 4 + i.chunkCountKindBytes()
 	}
 
 	last := i.readChunkLastRaw(c)
-	nKind := i.readChunkNKindRaw(c)
+	count, kind := i.readChunkCountKind(c)
 	off := i.readChunkOffRaw(c)
 
-	count := nKind >> 2
-	kind := pefChunkKind(nKind & 3)
 	if kind > pefKindBitmap {
 		panic("corrupt pef posting: invalid chunk kind")
 	}
