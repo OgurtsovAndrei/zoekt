@@ -461,19 +461,39 @@ func TestPEFConfigAndEnvOverrides(t *testing.T) {
 	})
 
 	t.Run("PartitionConfigEnv", func(t *testing.T) {
-		t.Setenv("ZOEKT_PEF_FIX_COST", "160")
-		t.Setenv("ZOEKT_PEF_EPS1", "0.1")
-		t.Setenv("ZOEKT_PEF_EPS2", "0.5")
-		got := resolvePEFPartitionConfig()
-		if got.FixCost != 160 || got.Eps1 != 0.1 || got.Eps2 != 0.5 {
-			t.Fatalf("got %+v, want FixCost=160 Eps1=0.1 Eps2=0.5", got)
-		}
+		t.Run("ValidOverrides", func(t *testing.T) {
+			t.Setenv("ZOEKT_PEF_FIX_COST", "160")
+			t.Setenv("ZOEKT_PEF_EPS1", "0.1")
+			t.Setenv("ZOEKT_PEF_EPS2", "0.5")
+			got := resolvePEFPartitionConfig()
+			if got.FixCost != 160 || got.Eps1 != 0.1 || got.Eps2 != 0.5 {
+				t.Fatalf("got %+v, want FixCost=160 Eps1=0.1 Eps2=0.5", got)
+			}
+		})
 
 		// Invalid values fallback cleanly to default without panicking.
-		t.Setenv("ZOEKT_PEF_FIX_COST", "0")
-		got = resolvePEFPartitionConfig()
-		if got != defaultPEFPartitionConfig() {
-			t.Fatalf("invalid FixCost=0: got %+v, want %+v", got, defaultPEFPartitionConfig())
+		invalidCases := []struct {
+			name string
+			env  string
+			val  string
+		}{
+			{"FixCostZero", "ZOEKT_PEF_FIX_COST", "0"},
+			{"FixCostMaxUint64", "ZOEKT_PEF_FIX_COST", "18446744073709551615"},
+			{"Eps1NaN", "ZOEKT_PEF_EPS1", "NaN"},
+			{"Eps2NaN", "ZOEKT_PEF_EPS2", "NaN"},
+			{"Eps2PlusInf", "ZOEKT_PEF_EPS2", "+Inf"},
+		}
+		for _, tc := range invalidCases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Setenv("ZOEKT_PEF_FIX_COST", "")
+				t.Setenv("ZOEKT_PEF_EPS1", "")
+				t.Setenv("ZOEKT_PEF_EPS2", "")
+				t.Setenv(tc.env, tc.val)
+				got := resolvePEFPartitionConfig()
+				if got != defaultPEFPartitionConfig() {
+					t.Fatalf("invalid %s=%s: got %+v, want %+v", tc.env, tc.val, got, defaultPEFPartitionConfig())
+				}
+			})
 		}
 	})
 

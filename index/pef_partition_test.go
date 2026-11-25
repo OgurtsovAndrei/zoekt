@@ -369,3 +369,50 @@ func TestPEFPartitionCrossSuperblock(t *testing.T) {
 		t.Fatalf("reused partition output differed from first run")
 	}
 }
+
+func TestPEFPartitionConfigValidationAndEdgeCases(t *testing.T) {
+	invalidConfigs := []struct {
+		name string
+		cfg  pefPartitionConfig
+	}{
+		{"Eps1NaN", pefPartitionConfig{Eps1: math.NaN(), Eps2: 0.3, Eps3: 0.01, FixCost: 112}},
+		{"Eps1Negative", pefPartitionConfig{Eps1: -0.1, Eps2: 0.3, Eps3: 0.01, FixCost: 112}},
+		{"Eps1One", pefPartitionConfig{Eps1: 1.0, Eps2: 0.3, Eps3: 0.01, FixCost: 112}},
+		{"Eps2NaN", pefPartitionConfig{Eps1: 0.03, Eps2: math.NaN(), Eps3: 0.01, FixCost: 112}},
+		{"Eps2PlusInf", pefPartitionConfig{Eps1: 0.03, Eps2: math.Inf(1), Eps3: 0.01, FixCost: 112}},
+		{"Eps2Zero", pefPartitionConfig{Eps1: 0.03, Eps2: 0, Eps3: 0.01, FixCost: 112}},
+		{"Eps3NaN", pefPartitionConfig{Eps1: 0.03, Eps2: 0.3, Eps3: math.NaN(), FixCost: 112}},
+		{"Eps3PlusInf", pefPartitionConfig{Eps1: 0.03, Eps2: 0.3, Eps3: math.Inf(1), FixCost: 112}},
+		{"Eps3Negative", pefPartitionConfig{Eps1: 0.03, Eps2: 0.3, Eps3: -0.01, FixCost: 112}},
+		{"FixCostZero", pefPartitionConfig{Eps1: 0.03, Eps2: 0.3, Eps3: 0.01, FixCost: 0}},
+		{"FixCostTooLarge", pefPartitionConfig{Eps1: 0.03, Eps2: 0.3, Eps3: 0.01, FixCost: (1 << 30) + 1}},
+		{"FixCostMaxUint64", pefPartitionConfig{Eps1: 0.03, Eps2: 0.3, Eps3: 0.01, FixCost: math.MaxUint64}},
+	}
+	for _, tc := range invalidConfigs {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.cfg.validate(); err == nil {
+				t.Fatalf("expected validate() error for %+v", tc.cfg)
+			}
+		})
+	}
+
+	if got := pefSuperblockSize(1<<30, 1e-10); got != 1<<30 {
+		t.Fatalf("pefSuperblockSize overflow clamp = %d, want %d", got, 1<<30)
+	}
+	if got := pefSuperblockSize(112, 0); got != 1<<30 {
+		t.Fatalf("pefSuperblockSize eps3=0 = %d, want %d", got, 1<<30)
+	}
+
+	// Huge finite Eps2 must terminate cleanly without float-to-uint64 overflow or infinite loops.
+	hugeEps2Cfg := pefPartitionConfig{Eps1: 0.03, Eps2: 1e20, Eps3: 0.01, FixCost: 112}
+	if err := hugeEps2Cfg.validate(); err != nil {
+		t.Fatalf("huge finite Eps2 validate() unexpected error: %v", err)
+	}
+	keys := make([]uint32, 200)
+	for i := range keys {
+		keys[i] = uint32(i * 100)
+	}
+	var s pefPartitionScratch
+	got := s.partition(keys, hugeEps2Cfg, nil)
+	assertValidPartition(t, got, uint32(len(keys)))
+}

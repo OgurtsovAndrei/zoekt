@@ -119,6 +119,9 @@ func newPEFPostingIterator(blob []byte, w ngram) *pefPostingIterator {
 	want0 := pefChunkPayloadSize(kind0, lastRel0, count0)
 	payloadLen := uint64(len(blob)) - payloadStart
 	if c == 1 {
+		if count0 != n {
+			panic("corrupt pef posting: single chunk count mismatch")
+		}
 		if want0 != payloadLen {
 			panic("corrupt pef posting: chunk 0 payload size mismatch")
 		}
@@ -163,7 +166,7 @@ func (i *pefPostingIterator) next(limit uint32) {
 			return
 		}
 	} else if !i.chunkLoaded {
-		i.loadChunk(0, true)
+		i.loadChunk(0)
 	}
 	i.seekInChunk(target)
 }
@@ -230,7 +233,7 @@ func (i *pefPostingIterator) advanceToChunk(target uint32) bool {
 		panic("corrupt pef posting: non-monotonic chunkLast")
 	}
 	if target <= v {
-		i.loadChunk(lo, true)
+		i.loadChunk(lo)
 		return true
 	}
 
@@ -280,14 +283,11 @@ func (i *pefPostingIterator) advanceToChunk(target uint32) bool {
 			hi = mid
 		}
 	}
-	i.loadChunk(lo, true)
+	i.loadChunk(lo)
 	return true
 }
 
-func (i *pefPostingIterator) loadChunk(c int, lastAlreadyCounted bool) {
-	if !lastAlreadyCounted {
-		i.indexBytesLoaded += 4
-	}
+func (i *pefPostingIterator) loadChunk(c int) {
 	if c != 0 {
 		i.indexBytesLoaded += 8
 	}

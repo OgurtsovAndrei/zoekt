@@ -209,11 +209,9 @@ func TestPEFPostingIteratorSequentialAndSkip(t *testing.T) {
 					it := newPEFPostingIterator(blob, ng)
 					jumpTarget := keys[len(keys)-2] - 1
 					it.next(jumpTarget)
-					want := keys[len(keys)-2]
 					if it.first() < jumpTarget+1 || it.first() > keys[len(keys)-1] {
 						t.Fatalf("large jump got %d, want in [%d, %d]", it.first(), jumpTarget+1, keys[len(keys)-1])
 					}
-					_ = want
 					// Compare exact single jump against inMemoryIterator.
 					mem := &inMemoryIterator{postings: slices.Clone(keys)}
 					mem.next(jumpTarget)
@@ -226,12 +224,12 @@ func TestPEFPostingIteratorSequentialAndSkip(t *testing.T) {
 	})
 
 	t.Run("EF_LargeBucketBinarySearch", func(t *testing.T) {
-		// Create a chunk where 150 keys fall into bucket h=1 (ell=8, lows 0..299 step 2)
+		// Create a chunk where 150 keys fall into bucket h=1 (ell=8, lows 0..149)
 		// plus an outlier at the end so EF is chosen and bucket h=1 has > 64 elements.
 		keys := make([]uint32, 0, 152)
 		keys = append(keys, 100) // h=0, low=0
 		for i := uint32(0); i < 150; i++ {
-			keys = append(keys, 100+256+i) // 150 keys in bucket h=1 (ell=8 -> 256..511), wait: 256+150=406 < 512!
+			keys = append(keys, 100+256+i) // 150 keys in bucket h=1 (ell=8 -> rel 256..405)
 		}
 		keys = append(keys, 100+50000) // forces sparse EF with ell >= 8
 		cfg := defaultPEFPartitionConfig()
@@ -510,9 +508,7 @@ func TestPEFPostingIteratorAllocs(t *testing.T) {
 
 	it := newPEFPostingIterator(blob, ng)
 	loopAllocs := testing.AllocsPerRun(50, func() {
-		// Reset iterator in place via value assignment isn't needed if we create outside;
-		// test zero allocs during first/next by skipping through pre-built iterators?
-		// Better: measure first()/next() across a fresh slice of iterators or re-init fields.
+		// Re-initialize iterator state in place to measure first()/next() allocations alone.
 		it.curVal = it.firstKey
 		it.chunkIdx = 0
 		it.chunkLast = binary.LittleEndian.Uint32(it.blob[12:16])
@@ -630,6 +626,14 @@ func TestPEFPostingIteratorMalformed(t *testing.T) {
 		nk := binary.LittleEndian.Uint32(bad[12+4*numChunks : 16+4*numChunks])
 		binary.LittleEndian.PutUint32(bad[12+4*numChunks:], nk&3)
 		assertCorruptPanic(t, func() { newPEFPostingIterator(bad, ng) })
+	})
+
+	t.Run("SingleChunkCountMismatch", func(t *testing.T) {
+		single := encodeTestPEF([]uint32{10, 11, 12, 13}, defaultPEFPartitionConfig())
+		// Decrement count0 from 4 to 3 (while keeping kind0=AllOnes and payload=0).
+		nk := binary.LittleEndian.Uint32(single[16:20])
+		binary.LittleEndian.PutUint32(single[16:20], ((nk>>2)-1)<<2|(nk&3))
+		assertCorruptPanic(t, func() { newPEFPostingIterator(single, ng) })
 	})
 
 	t.Run("OOBChunkOff", func(t *testing.T) {

@@ -16,6 +16,7 @@ package index
 
 import (
 	"fmt"
+	"math"
 	"math/bits"
 )
 
@@ -35,7 +36,8 @@ const pefCodecTypeBits = 1
 // whose relative key range is [0, lastRel] (inclusive), in bits,
 // without sampling overhead:
 //
-//	bits = n*ℓ + (n + ⌊(lastRel+1) / 2^ℓ⌋ + 2),  ℓ = ⌊log₂((lastRel+1) / n)⌋.
+//	bits = n*lo + n + (lastRel >> lo) + 3,
+//	where lo = ⌊log₂(lastRel / n)⌋ for lastRel >= n, else 0.
 func pefEFBitsizePaper(lastRel, n uint64) uint64 {
 	if n == 0 {
 		return 0
@@ -120,26 +122,30 @@ func defaultPEFPartitionConfig() pefPartitionConfig {
 }
 
 func (cfg pefPartitionConfig) validate() error {
-	if cfg.Eps1 < 0 || cfg.Eps1 >= 1 {
+	if math.IsNaN(cfg.Eps1) || cfg.Eps1 < 0 || cfg.Eps1 >= 1 {
 		return fmt.Errorf("pefPartitionConfig.Eps1 must be in [0, 1), got %v", cfg.Eps1)
 	}
-	if cfg.Eps2 <= 0 {
-		return fmt.Errorf("pefPartitionConfig.Eps2 must be > 0, got %v", cfg.Eps2)
+	if math.IsNaN(cfg.Eps2) || math.IsInf(cfg.Eps2, 0) || cfg.Eps2 <= 0 {
+		return fmt.Errorf("pefPartitionConfig.Eps2 must be finite and > 0, got %v", cfg.Eps2)
 	}
-	if cfg.Eps3 < 0 {
-		return fmt.Errorf("pefPartitionConfig.Eps3 must be >= 0, got %v", cfg.Eps3)
+	if math.IsNaN(cfg.Eps3) || math.IsInf(cfg.Eps3, 0) || cfg.Eps3 < 0 {
+		return fmt.Errorf("pefPartitionConfig.Eps3 must be finite and >= 0, got %v", cfg.Eps3)
 	}
-	if cfg.FixCost == 0 {
-		return fmt.Errorf("pefPartitionConfig.FixCost must be > 0")
+	if cfg.FixCost == 0 || cfg.FixCost > 1<<30 {
+		return fmt.Errorf("pefPartitionConfig.FixCost must be in [1, %d], got %d", 1<<30, cfg.FixCost)
 	}
 	return nil
 }
 
 func pefSuperblockSize(fixCost uint64, eps3 float64) int {
-	if eps3 <= 0 {
+	if math.IsNaN(eps3) || eps3 <= 0 {
 		return 1 << 30
 	}
-	sz := int(float64(fixCost) / eps3)
+	f := float64(fixCost) / eps3
+	if math.IsNaN(f) || f >= float64(1<<30) {
+		return 1 << 30
+	}
+	sz := int(f)
 	if sz < 1 {
 		return 1
 	}
@@ -258,9 +264,15 @@ func (s *pefPartitionScratch) computeSuperblock(
 		if costBound >= singleBlockCost {
 			break
 		}
-		next := uint64(float64(costBound) * (1 + cfg.Eps2))
-		if next == costBound {
-			next++
+		nextF := float64(costBound) * (1 + cfg.Eps2)
+		var next uint64
+		if math.IsNaN(nextF) || nextF >= float64(singleBlockCost) {
+			next = singleBlockCost
+		} else {
+			next = uint64(nextF)
+			if next <= costBound {
+				next = costBound + 1
+			}
 		}
 		costBound = next
 	}
